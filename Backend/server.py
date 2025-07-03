@@ -73,7 +73,7 @@ def start_mqtt():
     client.on_log = on_log
     client.connect(MQTT_BROKER, MQTT_PORT, 60)
     client.subscribe(MQTT_TOPIC)
-    client.loop_forever()
+    client.loop_start()
 
 mqtt_thread = threading.Thread(target=start_mqtt, daemon=True)
 mqtt_thread.start()
