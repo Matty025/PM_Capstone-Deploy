@@ -1,4 +1,11 @@
 {
+  "name": "capstone-node-backend",
+  "version": "1.0.0",
+  "description": "Node.js backend for preventive maintenance",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "@influxdata/influxdb-client": "^1.35.0",
     "axios": "^1.10.0",
