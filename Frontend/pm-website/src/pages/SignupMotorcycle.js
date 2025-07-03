@@ -25,12 +25,11 @@ function SignupMotorcycle() {
     Kawasaki: ["Rouser NS125 FI", "Ninja 250", "Rouser NS200 FI", "Brusky i125"],
   };
 
-  // 🔁 Refactor to make reusable
   const fetchMotorcycles = () => {
     const userId = localStorage.getItem("userId");
     const token = localStorage.getItem("token");
 
-      fetch(`${process.env.REACT_APP_NODE_SERVER_URL}/get-motorcycles?userId=${userId}`, {
+    fetch(`${process.env.REACT_APP_NODE_SERVER_URL}/get-motorcycles?userId=${userId}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -43,7 +42,7 @@ function SignupMotorcycle() {
         setLoading(false);
       })
       .catch(() => {
-        toast.error("Failed to load motorcycles.");
+        toast.error("❌ Failed to load motorcycles.");
         setLoading(false);
       });
   };
@@ -53,7 +52,7 @@ function SignupMotorcycle() {
     const token = localStorage.getItem("token");
 
     if (!userId || !token) {
-      toast.error("Session expired. Please log in again.");
+      toast.error("⚠️ Session expired. Please log in again.");
       navigate("/login");
       return;
     }
@@ -67,7 +66,8 @@ function SignupMotorcycle() {
   };
 
   const handleChange = (e) => {
-    setMotorcycleData({ ...motorcycleData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setMotorcycleData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -75,37 +75,32 @@ function SignupMotorcycle() {
     const userId = localStorage.getItem("userId");
 
     if (!userId) {
-      toast.error("Session expired. Please log in again.");
+      toast.error("⚠️ Session expired. Please log in again.");
       navigate("/login");
       return;
     }
 
-    if (
-      !motorcycleData.brand ||
-      !motorcycleData.model ||
-      !motorcycleData.year ||
-      !motorcycleData.plateNumber ||
-      motorcycleData.odometer === "" ||
-      !motorcycleData.lastOilChangeDate
-    ) {
+    const { brand, model, year, plateNumber, odometer, lastOilChangeDate } = motorcycleData;
+
+    if (!brand || !model || !year || !plateNumber || odometer === "" || !lastOilChangeDate) {
       toast.warn("⚠️ Please fill in all fields.");
       return;
     }
 
     try {
-        const response = await fetch(`${process.env.REACT_APP_NODE_SERVER_URL}/signup-motorcycle`, {
+      const response = await fetch(`${process.env.REACT_APP_NODE_SERVER_URL}/signup-motorcycle`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: JSON.stringify({
-          brand: motorcycleData.brand,
-          model: motorcycleData.model,
-          year: motorcycleData.year,
-          plateNumber: motorcycleData.plateNumber,
-          odometer_km: parseInt(motorcycleData.odometer, 10),
-          last_oil_change: motorcycleData.lastOilChangeDate,
+          brand,
+          model,
+          year: parseInt(year, 10),
+          plateNumber,
+          odometer_km: parseInt(odometer, 10),
+          last_oil_change: lastOilChangeDate,
           user_id: userId,
         }),
       });
@@ -113,18 +108,17 @@ function SignupMotorcycle() {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(data?.message || "✅ Motorcycle registered!");
+        toast.success(data?.message || "✅ Motorcycle registered successfully!");
 
-        // Optional: Store newly registered motorcycle if backend returns it
         if (data.motorcycle) {
           localStorage.setItem("selectedMotorcycle", JSON.stringify(data.motorcycle));
-          setTimeout(() => navigate("/dashboard"), 2000);
+          setTimeout(() => navigate("/dashboard"), 1500);
         } else {
           fetchMotorcycles();
           setRegisterNew(false);
         }
       } else {
-        toast.error(data?.error || "❌ Signup failed. Please try again.");
+        toast.error(data?.error || "❌ Registration failed.");
       }
     } catch (error) {
       toast.error("🚫 Server error. Please try again.");
@@ -136,7 +130,7 @@ function SignupMotorcycle() {
       setRegisterNew(false);
     } else {
       localStorage.removeItem("userId");
-      toast.info("No motorcycles registered. Returning to login.");
+      toast.info("ℹ️ No motorcycles registered. Returning to login.");
       navigate("/login");
     }
   };
@@ -164,7 +158,7 @@ function SignupMotorcycle() {
               className={styles.registerNewButton}
               onClick={() => setRegisterNew(true)}
             >
-              Register New Motorcycle
+               Register New Motorcycle
             </button>
           </>
         ) : (
@@ -181,16 +175,14 @@ function SignupMotorcycle() {
             <select
               name="model"
               required
+              disabled={!motorcycleData.brand}
               onChange={handleChange}
               value={motorcycleData.model}
-              disabled={!motorcycleData.brand}
             >
               <option value="">Select a Model</option>
               {motorcycleData.brand &&
                 brandModels[motorcycleData.brand]?.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
+                  <option key={model} value={model}>{model}</option>
                 ))}
             </select>
 
@@ -234,14 +226,14 @@ function SignupMotorcycle() {
             />
 
             <button className={styles.submitButton} type="submit">
-              Submit
+               Submit
             </button>
             <button
               type="button"
               className={styles.cancelButton}
               onClick={handleCancel}
             >
-              Cancel
+               Cancel
             </button>
           </form>
         )}

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Profile.css";
+import { toast, ToastContainer } from "react-toastify";
+
 
 function Profile() {
   const navigate = useNavigate();
@@ -14,7 +16,7 @@ function Profile() {
     const token = localStorage.getItem("token");
 
     if (!userId || !token) {
-      alert("You must be logged in.");
+      toast.error("❌ You must be logged in.");
       navigate("/login");
       return;
     }
@@ -33,11 +35,13 @@ function Profile() {
           throw new Error("User not found");
         }
       })
-      .catch((err) => {
-        console.error(err);
-        alert("Failed to fetch user data.");
-        navigate("/login");
-      });
+   .catch((err) => {
+  console.error("❌ Error fetching user:", err);
+  toast.error("Failed to fetch profile. Please log in again.");
+  localStorage.clear();
+  navigate("/login");
+});
+
 
     // Load selected motorcycle from localStorage
     const moto = JSON.parse(localStorage.getItem("selectedMotorcycle"));
