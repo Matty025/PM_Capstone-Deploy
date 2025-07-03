@@ -7,7 +7,7 @@ from influxdb_client import InfluxDBClient
 import json
 
 # ───────────────────────── Load Normal Range JSON ─────────────────────────
-with open("normal_ranges.json") as f:
+with open(os.path.join(os.path.dirname(__file__), "normal_ranges.json")) as f:
     NORMAL_RANGES = json.load(f)
 
 def normalize(text):
