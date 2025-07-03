@@ -33,6 +33,7 @@ if len(sys.argv) < 2:
 else:
     MOTORCYCLE_ID = sys.argv[1]
 
+MQTT_TOPIC = f"obd/motorcycle/{MOTORCYCLE_ID}/data"
 
 def on_connect(client, userdata, flags, rc):
     print(f"Connected to MQTT broker with result code {rc}")
