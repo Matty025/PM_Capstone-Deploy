@@ -11,14 +11,14 @@ obd.logger.setLevel(obd.logging.DEBUG)
 
 
 from urllib.parse import urlparse
-
-mqtt_url = os.getenv("MQTT_BROKER_URL", "wss://test.mosquitto.org:8081")
+mqtt_url = os.getenv("MQTT_BROKER_URL", "mqtt://broker.hivemq.com:1883")
 parsed = urlparse(mqtt_url)
 
-MQTT_BROKER = parsed.hostname or "test.mosquitto.org"
-MQTT_PORT = parsed.port or 8081
-MQTT_TOPIC = "obd/data"
-MQTT_TRANSPORT = "websockets" if parsed.scheme in ["ws", "wss"] else "tcp"
+MQTT_BROKER = parsed.hostname or "broker.hivemq.com"
+MQTT_PORT = parsed.port or 1883
+MQTT_TRANSPORT = "tcp"
+
+mqtt_client = mqtt.Client(transport=MQTT_TRANSPORT, protocol=mqtt.MQTTv311)
 
 # InfluxDB settings - update these with your real values
 INFLUXDB_URL = os.getenv("INFLUX_URL")
@@ -33,8 +33,6 @@ if len(sys.argv) < 2:
 else:
     MOTORCYCLE_ID = sys.argv[1]
 
-# Create MQTT client
-mqtt_client = mqtt.Client(transport="websockets", protocol=mqtt.MQTTv311)
 
 def on_connect(client, userdata, flags, rc):
     print(f"Connected to MQTT broker with result code {rc}")

@@ -32,7 +32,7 @@ print(f"📄 Files: {os.listdir(os.path.dirname(__file__))}")
 # ─────────────── MQTT CONFIG ───────────────
 from urllib.parse import urlparse
 
-mqtt_url = os.getenv("MQTT_BROKER_URL", "wss://test.mosquitto.org:8081")
+mqtt_url = os.getenv("MQTT_BROKER_URL", "mqtt://broker.hivemq.com:1883")
 parsed = urlparse(mqtt_url)
 
 MQTT_BROKER = parsed.hostname or "test.mosquitto.org"
@@ -68,12 +68,16 @@ def on_log(client, userdata, level, buf):
     print(f"[MQTT LOG] {buf}")
 
 def start_mqtt():
+    print(f"[MQTT] Connecting to {MQTT_BROKER}:{MQTT_PORT} using {MQTT_TRANSPORT}")
     client = mqttP.Client(transport=MQTT_TRANSPORT)
     client.on_message = on_message
     client.on_log = on_log
-    client.connect(MQTT_BROKER, MQTT_PORT, 60)
-    client.subscribe(MQTT_TOPIC)
-    client.loop_start()
+    try:
+        client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        client.subscribe(MQTT_TOPIC)
+        client.loop_start()
+    except Exception as e:
+        print(f"❌ MQTT Connection error: {e}")
 
 mqtt_thread = threading.Thread(target=start_mqtt, daemon=True)
 mqtt_thread.start()

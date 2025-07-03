@@ -98,10 +98,14 @@ import { BASE_URL } from "../config";
     }, []);
 
     useEffect(() => {
-          const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
-        reconnectPeriod: 5000,
-        keepalive: 60,
-      });
+const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
+  clientId: "mqtt_dashboard_" + Math.random().toString(16).substr(2, 8),
+  username: "",  // leave blank for public HiveMQ broker
+  password: "",  // leave blank for public HiveMQ broker
+  clean: true,
+  reconnectPeriod: 1000,
+});     
+
 
       client.on("connect", () => {
         console.log("Connected to MQTT broker");
