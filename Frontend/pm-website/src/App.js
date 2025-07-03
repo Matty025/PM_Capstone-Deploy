@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import SignupPersonal from "./pages/SignupPersonal";
 import SignupMotorcycle from "./pages/SignupMotorcycle";
@@ -20,7 +20,10 @@ function App() {
           <Route path="/signup-motorcycle" element={<SignupMotorcycle />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/reports" element={<Reports />} />
-          <Route path="/predictivemaintenance" element={<PredictiveMaintenance />} />
+          <Route
+            path="/predictivemaintenance"
+            element={<PredictiveMaintenance />}
+          />
           <Route path="/profile" element={<Profile />} />
         </Routes>
       </div>
