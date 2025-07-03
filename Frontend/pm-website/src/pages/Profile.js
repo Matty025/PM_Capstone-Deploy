@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Profile.css";
-import { toast, ToastContainer } from "react-toastify";
+import { toast, } from "react-toastify";
 
 
 function Profile() {
