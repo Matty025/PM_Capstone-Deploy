@@ -7,32 +7,35 @@ const mqtt = require("mqtt");
 const { InfluxDB, Point } = require("@influxdata/influxdb-client");
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
-// InfluxDB config
-const influxUrl = "http://localhost:8086";
-const influxToken = process.env.INFLUX_TOKEN || "y2gPcpacMB5yTLjeEuYVe7lR2AWjN_3p9R29XsHWYkuozvV-TzzJVi5u8Z1G3YwtXXPQBXOXaYc8fM1-wWOfzw==";
-const influxOrg = "MotorcycleMaintenance";
-const influxBucket = "MotorcycleOBDData";
+// ─────────── InfluxDB Setup ───────────
+const influxUrl = process.env.INFLUX_URL || "http://localhost:8086";
+const influxToken = process.env.INFLUX_TOKEN;
+const influxOrg = process.env.INFLUX_ORG || "MotorcycleMaintenance";
+const influxBucket = process.env.INFLUX_BUCKET || "MotorcycleOBDData";
 
 const influxDB = new InfluxDB({ url: influxUrl, token: influxToken });
 const writeApi = influxDB.getWriteApi(influxOrg, influxBucket, "ms");
 
-// Middleware
+// ─────────── Middleware ───────────
 app.use(cors());
 app.use(express.json());
 
-// PostgreSQL Connection Pool
+// ─────────── PostgreSQL Setup ───────────
 const pool = new Pool({
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
   database: process.env.DB_NAME,
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
-// Test DB Connection (simple query)
-pool.query('SELECT NOW()', (err) => {
+// Check DB connection
+pool.query("SELECT NOW()", (err) => {
   if (err) {
     console.error("❌ Database connection error:", err.stack);
   } else {
@@ -40,20 +43,19 @@ pool.query('SELECT NOW()', (err) => {
   }
 });
 
-// JWT Authentication Middleware
+// ─────────── JWT Middleware ───────────
 function authenticateToken(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Access denied, no token provided" });
+  if (!token) return res.status(401).json({ error: "No token provided" });
+
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: "Invalid or expired token" });
+    if (err) return res.status(403).json({ error: "Invalid token" });
     req.user = user;
     next();
   });
 }
 
-// --- Routes ---
-
-// Signup (no bcrypt yet)
+// ─────────── Auth Routes ───────────
 app.post("/signup", async (req, res) => {
   try {
     const { firstName, lastName, email, phone, password } = req.body;
@@ -76,74 +78,50 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-// Login (plaintext password check)
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required." });
-    }
-
     const result = await pool.query("SELECT id, email, password FROM users WHERE email = $1", [email]);
-    if (result.rows.length === 0) {
+
+    if (result.rows.length === 0 || password.trim() !== result.rows[0].password.trim()) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const user = result.rows[0];
-    if (password.trim() !== user.password.trim()) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+
     res.json({ token, userId: user.id, email: user.email });
   } catch (error) {
-    console.error("🔥 Login Error:", error);
+    console.error("🔥 Login error:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-// Get User Profile
 app.get("/get-user", authenticateToken, async (req, res) => {
-  const { userId } = req.user;
-  if (!userId) return res.status(400).json({ error: "User ID required" });
-
   try {
-    const result = await pool.query(
+    const { rows } = await pool.query(
       "SELECT first_name, last_name, email, phone FROM users WHERE id = $1",
-      [userId]
+      [req.user.userId]
     );
-
-    if (result.rows.length === 0) return res.status(404).json({ error: "User not found" });
-
-    res.json({ user: result.rows[0] });
-  } catch (error) {
-    console.error("Database error:", error);
+    if (rows.length === 0) return res.status(404).json({ error: "User not found" });
+    res.json({ user: rows[0] });
+  } catch (err) {
+    console.error("DB error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// Signup Motorcycle
+// ─────────── Motorcycle Routes ───────────
 app.post("/signup-motorcycle", async (req, res) => {
   try {
     const { user_id, brand, model, year, plateNumber, odometer_km, last_oil_change } = req.body;
-
-    if (!user_id) {
-      return res.status(401).json({ error: "Session expired. Please log in again." });
-    }
-
-    if (!brand || !model || !year || !plateNumber) {
-      return res.status(400).json({ error: "All fields are required!" });
-    }
-
-    const odometer = odometer_km || 0;
-    const lastOilChange = last_oil_change || null;
 
     const result = await pool.query(
       `INSERT INTO motorcycles 
         (user_id, brand, model, year, plate_number, odometer_km, last_oil_change) 
        VALUES ($1, $2, $3, $4, $5, $6, $7) 
        RETURNING *`,
-      [user_id, brand, model, year, plateNumber, odometer, lastOilChange]
+      [user_id, brand, model, year, plateNumber, odometer_km || 0, last_oil_change || null]
     );
 
     res.status(201).json({
@@ -159,48 +137,34 @@ app.post("/signup-motorcycle", async (req, res) => {
   }
 });
 
-// Get User Motorcycles
 app.get("/get-motorcycles", authenticateToken, async (req, res) => {
-  const { userId } = req.user;
-  if (!userId) return res.status(400).json({ error: "User ID required" });
-
   try {
-    const result = await pool.query("SELECT * FROM motorcycles WHERE user_id = $1", [userId]);
-    res.json({ motorcycles: result.rows });
-  } catch (error) {
-    console.error("Database error:", error);
+    const { rows } = await pool.query("SELECT * FROM motorcycles WHERE user_id = $1", [req.user.userId]);
+    res.json({ motorcycles: rows });
+  } catch (err) {
+    console.error("DB error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
-// this is for the oil change 
 
-
-// GET  /oil-history?motorcycle_id=123
+// ─────────── Oil Change Routes ───────────
 app.get("/oil-history", async (req, res) => {
-  const motorcycle_id = req.query.motorcycle_id;
-  if (!motorcycle_id) return res.status(400).json({ error: "motorcycle_id required" });
-
   try {
     const { rows } = await pool.query(
-      `SELECT id,
-              odometer_at_change,
-              date_of_oil_change,
-              created_at
-         FROM oil_change_history
-        WHERE motorcycle_id = $1
-     ORDER BY date_of_oil_change DESC`,
-      [motorcycle_id]
+      `SELECT id, odometer_at_change, date_of_oil_change, created_at
+       FROM oil_change_history WHERE motorcycle_id = $1
+       ORDER BY date_of_oil_change DESC`,
+      [req.query.motorcycle_id]
     );
-    res.json(rows);          // full change‑oil history
+    res.json(rows);
   } catch (err) {
-    console.error("Fetch oil history error:", err);
+    console.error("Oil history error:", err);
     res.status(500).json({ error: "Failed to retrieve oil history" });
   }
 });
 
 app.post("/oil-change", async (req, res) => {
   const { motorcycle_id, odometer_km, date_of_oil_change } = req.body;
-
   if (!motorcycle_id || !odometer_km) {
     return res.status(400).json({ error: "motorcycle_id and odometer_km required" });
   }
@@ -213,24 +177,20 @@ app.post("/oil-change", async (req, res) => {
     );
     res.status(201).json({ message: "Odometer logged successfully" });
   } catch (err) {
-    console.error("Error saving odometer:", err);
+    console.error("Oil change save error:", err);
     res.status(500).json({ error: "Failed to log odometer" });
   }
 });
 
-
-// MQTT Setup
-const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || "mqtt://test.mosquitto.org";
+// ─────────── MQTT Setup (via wss) ───────────
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || "wss://test.mosquitto.org:8081";
 const mqttClient = mqtt.connect(MQTT_BROKER_URL);
 
 mqttClient.on("connect", () => {
   console.log("🔌 Connected to MQTT broker:", MQTT_BROKER_URL);
   mqttClient.subscribe("obd/data", (err) => {
-    if (err) {
-      console.error("❌ MQTT subscription error:", err);
-    } else {
-      console.log("✅ Subscribed to topic: obd/data");
-    }
+    if (err) console.error("❌ MQTT subscription error:", err);
+    else console.log("✅ Subscribed to topic: obd/data");
   });
 });
 
@@ -247,24 +207,20 @@ mqttClient.on("message", (topic, message) => {
     const data = payload.data || {};
 
     const point = new Point("obd_data").tag("motorcycle_id", motorcycleId);
-
     for (const [key, value] of Object.entries(data)) {
-      if (typeof value === "number") {
-        point.floatField(key.toLowerCase(), value);
-      }
+      if (typeof value === "number") point.floatField(key.toLowerCase(), value);
     }
 
     writeApi.writePoint(point);
     writeApi.flush()
-      .then(() => console.log("[InfluxDB] Data written successfully"))
+      .then(() => console.log("[InfluxDB] Data written"))
       .catch((err) => console.error("[InfluxDB] Write error:", err));
-
   } catch (e) {
-    console.error("Error parsing or processing MQTT message:", e);
+    console.error("MQTT processing error:", e);
   }
 });
 
-// Start Server
+// ─────────── Start Server ───────────
 app.listen(port, () => {
   console.log(`🚀 Server running on http://localhost:${port}`);
 });
