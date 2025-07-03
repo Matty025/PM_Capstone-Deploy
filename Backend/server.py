@@ -30,8 +30,14 @@ print(f"📂 Current working dir: {os.getcwd()}")
 print(f"📄 Files: {os.listdir(os.path.dirname(__file__))}")
 
 # ─────────────── MQTT CONFIG ───────────────
-MQTT_BROKER = os.getenv("MQTT_BROKER_URL", "broker.hivemq.com")
-MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+from urllib.parse import urlparse
+
+mqtt_url = os.getenv("MQTT_BROKER_URL", "wss://test.mosquitto.org:8081")
+parsed = urlparse(mqtt_url)
+
+MQTT_BROKER = parsed.hostname or "test.mosquitto.org"
+MQTT_PORT = parsed.port or 8081
+MQTT_TRANSPORT = "websockets" if parsed.scheme in ["ws", "wss"] else "tcp"
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "obd/data")
 
 # Store latest OBD data
@@ -62,7 +68,7 @@ def on_log(client, userdata, level, buf):
     print(f"[MQTT LOG] {buf}")
 
 def start_mqtt():
-    client = mqttP.Client()
+    client = mqttP.Client(transport=MQTT_TRANSPORT)
     client.on_message = on_message
     client.on_log = on_log
     client.connect(MQTT_BROKER, MQTT_PORT, 60)
