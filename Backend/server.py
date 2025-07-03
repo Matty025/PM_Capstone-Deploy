@@ -1,12 +1,16 @@
 import sys
 import os
 
+# ─────────────── Load .env Variables ───────────────
+from dotenv import load_dotenv
+load_dotenv()
+
 # Allow importing sibling files like anomaly_model.py
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import paho.mqtt.client as mqttP  # ✅ correct alias used below
+import paho.mqtt.client as mqttP
 import json
 import subprocess
 import threading
@@ -21,19 +25,18 @@ app = Flask(__name__)
 CORS(app)
 app.register_blueprint(report_api)
 
-# Debug logs for Render
 print("✅ Server is starting...")
 print(f"📂 Current working dir: {os.getcwd()}")
 print(f"📄 Files: {os.listdir(os.path.dirname(__file__))}")
 
-# MQTT broker settings
-MQTT_BROKER = "broker.hivemq.com"
-MQTT_PORT = 1883
-MQTT_TOPIC = "obd/data"
+# ─────────────── MQTT CONFIG ───────────────
+MQTT_BROKER = os.getenv("MQTT_BROKER_URL", "broker.hivemq.com")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_TOPIC = os.getenv("MQTT_TOPIC", "obd/data")
 
 # Store latest OBD data
 latest_obd_data = {}
-obd_process = None  # track running subprocess
+obd_process = None
 
 def kill_existing_obd_process():
     for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
@@ -47,7 +50,7 @@ def kill_existing_obd_process():
 
 kill_existing_obd_process()
 
-# MQTT callback
+# ─────────────── MQTT HANDLERS ───────────────
 def on_message(client, userdata, msg):
     global latest_obd_data
     try:
@@ -58,7 +61,6 @@ def on_message(client, userdata, msg):
 def on_log(client, userdata, level, buf):
     print(f"[MQTT LOG] {buf}")
 
-# ✅ FIXED: use mqttP.Client() here
 def start_mqtt():
     client = mqttP.Client()
     client.on_message = on_message
@@ -70,7 +72,6 @@ def start_mqtt():
 mqtt_thread = threading.Thread(target=start_mqtt, daemon=True)
 mqtt_thread.start()
 
-# For streaming subprocess output
 def stream_output(pipe, name):
     for line in iter(pipe.readline, ''):
         print(f"[{name}] {line.rstrip()}")
@@ -251,5 +252,6 @@ def predict_from_csv():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ─────────────── App Run Entry Point ───────────────
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))

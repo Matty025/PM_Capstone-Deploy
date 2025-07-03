@@ -38,10 +38,10 @@ MINUTES = args.minutes
 # ────────────────────────────────────────────────────────────
 # 2) InfluxDB connection (edit if needed)
 # ────────────────────────────────────────────────────────────
-INFLUXDB_URL    = "http://localhost:8086"
-INFLUXDB_TOKEN  = "rLaEXQUWJ2R71NQIEFVfhw18L9xC4knKBf7bPAymrJtz6nukc5NIfPPdoc2dlk0c8n_gGm6kiwi7aDAl-uCmWA=="
-INFLUXDB_ORG    = "MotorcycleMaintenance"
-INFLUXDB_BUCKET = "MotorcycleOBDData"
+INFLUXDB_URL = os.getenv("INFLUX_URL")
+INFLUXDB_TOKEN = os.getenv("INFLUX_TOKEN")
+INFLUXDB_ORG = os.getenv("INFLUX_ORG")
+INFLUXDB_BUCKET = os.getenv("INFLUX_BUCKET")
 
 client    = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
 query_api = client.query_api()

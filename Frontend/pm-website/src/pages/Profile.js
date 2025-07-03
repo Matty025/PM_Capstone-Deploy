@@ -20,7 +20,7 @@ function Profile() {
     }
 
     // Fetch user details
-    fetch(`http://localhost:3001/get-user`, {
+    fetch(`${process.env.REACT_APP_NODE_SERVER_URL}/get-user`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

@@ -51,7 +51,7 @@ function PredictiveMaintenance() {
   const fetchRows = async (motorcycle_id, mins, { silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const { data } = await axios.post("http://localhost:5000/recent-data", {
+        const { data } = await axios.post(`${process.env.REACT_APP_PY_SERVER_URL}/recent-data`, {
         motorcycle_id,
         minutes: mins,
       });
@@ -99,7 +99,7 @@ useEffect(() => {
       formData.append("model", model);
       formData.append("motorcycle_id", id);
 
-      const { data } = await axios.post("http://localhost:5000/predict-from-csv", formData, {
+      const { data } = await axios.post(`${process.env.REACT_APP_PY_SERVER_URL}/predict-from-csv`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -118,7 +118,7 @@ useEffect(() => {
 
   toast.info("📡 Using latest InfluxDB sensor data for analysis...");
 
-  const { data } = await axios.post("http://localhost:5000/predict", {
+    const { data } = await axios.post(`${process.env.REACT_APP_PY_SERVER_URL}/predict`, {
     motorcycle_id: id,
     brand,
     model,
@@ -178,7 +178,7 @@ const saveRecentDataAsCSV = () => {
   }
 
   try {
-    const res = await axios.post("http://localhost:5000/train_model", {
+      const res = await axios.post(`${process.env.REACT_APP_PY_SERVER_URL}/train_model`, {
       motorcycle_id,
       brand,
     });

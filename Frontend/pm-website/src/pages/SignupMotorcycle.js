@@ -30,7 +30,7 @@ function SignupMotorcycle() {
     const userId = localStorage.getItem("userId");
     const token = localStorage.getItem("token");
 
-    fetch(`http://localhost:3001/get-motorcycles?userId=${userId}`, {
+      fetch(`${process.env.REACT_APP_NODE_SERVER_URL}/get-motorcycles?userId=${userId}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -93,7 +93,7 @@ function SignupMotorcycle() {
     }
 
     try {
-      const response = await fetch("http://localhost:3001/signup-motorcycle", {
+        const response = await fetch(`${process.env.REACT_APP_NODE_SERVER_URL}/signup-motorcycle`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

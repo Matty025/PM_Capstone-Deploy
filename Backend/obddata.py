@@ -15,10 +15,10 @@ MQTT_PORT = 1883
 MQTT_TOPIC = "obd/data"
 
 # InfluxDB settings - update these with your real values
-INFLUXDB_URL = "http://localhost:8086"
-INFLUXDB_TOKEN = "rLaEXQUWJ2R71NQIEFVfhw18L9xC4knKBf7bPAymrJtz6nukc5NIfPPdoc2dlk0c8n_gGm6kiwi7aDAl-uCmWA=="
-INFLUXDB_ORG = "MotorcycleMaintenance"
-INFLUXDB_BUCKET = "MotorcycleOBDData"
+INFLUXDB_URL = os.getenv("INFLUX_URL")
+INFLUXDB_TOKEN = os.getenv("INFLUX_TOKEN")
+INFLUXDB_ORG = os.getenv("INFLUX_ORG")
+INFLUXDB_BUCKET = os.getenv("INFLUX_BUCKET")
 
 # Get motorcycle_id from command line argument (optional)
 if len(sys.argv) < 2:

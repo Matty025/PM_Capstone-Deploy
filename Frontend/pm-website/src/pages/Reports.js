@@ -57,8 +57,9 @@ const fetchOilHistory = useCallback(async () => {
   try {
     setLoading(true);
     const res = await axios.get(
-      `http://localhost:3001/oil-history?motorcycle_id=${motorcycle.id}`
-    );
+  `${process.env.REACT_APP_NODE_SERVER_URL}/oil-history?motorcycle_id=${motorcycle.id}`
+);
+
     const data = res.data;
     setOilHistory(data);
     setErrorMsg("");
@@ -79,11 +80,11 @@ const fetchOilHistory = useCallback(async () => {
 
     try {
       const dailyRes = await axios.get(
-        `http://localhost:5000/reports/daily?motorcycle_id=${motorcycle.id}`
-      );
-      const weeklyRes = await axios.get(
-        `http://localhost:5000/reports/weekly?motorcycle_id=${motorcycle.id}`
-      );
+  `${process.env.REACT_APP_PYTHON_SERVER_URL}/reports/daily?motorcycle_id=${motorcycle.id}`
+);
+ const weeklyRes = await axios.get(
+  `${process.env.REACT_APP_PYTHON_SERVER_URL}/reports/weekly?motorcycle_id=${motorcycle.id}`
+);
       setDailyReport(dailyRes.data);
       setWeeklyReport(weeklyRes.data);
     } catch (err) {
@@ -120,7 +121,7 @@ useEffect(() => {
     }
 
     try {
-      await axios.post("http://localhost:3001/oil-change", {
+await axios.post(`${process.env.REACT_APP_NODE_SERVER_URL}/oil-change`, {
         motorcycle_id: motorcycle.id,
         odometer_km,
         date_of_oil_change:
