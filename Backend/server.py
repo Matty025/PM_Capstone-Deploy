@@ -1,12 +1,15 @@
+import sys
+import os
+
+# This allows importing sibling files like anomaly_model.py
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 import json
 import subprocess
-import os
 import threading
-import sys
 import psutil
 from anomaly_model import detect_anomalies
 import joblib
