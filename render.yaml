@@ -3,6 +3,7 @@ services:
     name: capstone-backend
     env: python
     buildCommand: "pip install -r Backend/requirements.txt"
-    startCommand: "gunicorn Backend.server:app"
+    startCommand: "gunicorn server:app"
     plan: free
     region: singapore
+    workingDir: Backend
