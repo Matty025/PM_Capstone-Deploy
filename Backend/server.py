@@ -258,6 +258,10 @@ def predict_from_csv():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route("/")
+def index():
+    return jsonify({"status": "ok", "message": "Server running."}), 200
+
 # ─────────────── App Run Entry Point ───────────────
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
