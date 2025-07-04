@@ -10,9 +10,9 @@ const app = express();
 const port = process.env.PORT || 3001;
 
 // ─────────── InfluxDB Setup ───────────
-const influxUrl = process.env.INFLUX_URL || "http://localhost:8086";
+const influxUrl = process.env.INFLUX_URL || "https://us-east-1-1.aws.cloud2.influxdata.com";
 const influxToken = process.env.INFLUX_TOKEN;
-const influxOrg = process.env.INFLUX_ORG || "MotorcycleMaintenance";
+const influxOrg = process.env.INFLUX_ORG || "6f21ef7f4355d0d";
 const influxBucket = process.env.INFLUX_BUCKET || "MotorcycleOBDData";
 
 const influxDB = new InfluxDB({ url: influxUrl, token: influxToken });
@@ -56,12 +56,17 @@ function authenticateToken(req, res, next) {
 }
 
 // ─────────── Auth Routes ───────────
-app.post("/signup", async (req, res) => {
+app.post("/signup-personal", async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password } = req.body;
-    if (!email || !password || !firstName || !lastName || !phone) {
+    const { fullName, email, phone, password } = req.body;
+
+    if (!fullName || !email || !phone || !password) {
       return res.status(400).json({ error: "All fields are required" });
     }
+
+    // Split full name into first and last (optional but nice to have)
+    const [firstName, ...rest] = fullName.trim().split(" ");
+    const lastName = rest.join(" ");
 
     const result = await pool.query(
       "INSERT INTO users (first_name, last_name, email, phone, password) VALUES ($1, $2, $3, $4, $5) RETURNING id, email",
@@ -73,10 +78,16 @@ app.post("/signup", async (req, res) => {
       user: result.rows[0],
     });
   } catch (error) {
-    console.error("🔥 Signup error:", error);
+    if (error.code === "23505") {
+      return res.status(400).json({ error: "Email already exists." });
+    }
+
+    console.error("🔥 Signup-personal error:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+
 
 app.post("/login", async (req, res) => {
   try {
