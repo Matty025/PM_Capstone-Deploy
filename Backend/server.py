@@ -25,7 +25,7 @@ app = Flask(__name__)
 
 CORS(app, resources={r"/*": {"origins": [
     "https://preventive-maintenance-ml.onrender.com",
-    "https://7a2e-175-176-24-83.ngrok-free.app"
+    "https://fluffy-words-cover.loca.lt"
 ]}}, supports_credentials=True)
 
 app.register_blueprint(report_api)
@@ -35,7 +35,7 @@ def after_request(response):
     origin = request.headers.get("Origin")
     allowed_origins = [
         "https://preventive-maintenance-ml.onrender.com",
-        "https://7a2e-175-176-24-83.ngrok-free.app "
+        "https://fluffy-words-cover.loca.lt"
     ]
     if origin in allowed_origins:
         response.headers.add("Access-Control-Allow-Origin", origin)
