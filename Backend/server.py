@@ -20,6 +20,7 @@ from report_api import report_api  # 👈 import your Blueprint
 
 app = Flask(__name__)
 CORS(app)  # Allow CORS for frontend access
+
 app.register_blueprint(report_api)  # 👈 attach /reports/daily and /weekly routes
 
 # MQTT broker settings

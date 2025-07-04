@@ -17,7 +17,7 @@
 // 🔁 Place this with other imports
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { PYTHON_SERVER_URL } from "../config.js";
+import { PYTHON_SERVER_URL } from "../config";
 
   ChartJS.register(
     CategoryScale,
@@ -150,11 +150,17 @@ import { PYTHON_SERVER_URL } from "../config.js";
 
 const handleStartOBD = async () => {
   toast.info("🔄 Starting OBD connection...");
+ 
+  
   try {
-      const res = await axios.post(`${PYTHON_SERVER_URL}/start-obd`, {
+    const res = await axios.post(`${PYTHON_SERVER_URL}/start-obd`, {
       motorcycle_id: motorcycle?.id,
+    }, {
+      withCredentials: true, // Add this if your Flask server uses CORS with credentials
     });
 
+    console.log("OBD start response:", res.data);
+    toast.success("✅ OBD data collection started.");
     const msg = res.data?.message || "";
 
     if (res.status === 200) {
