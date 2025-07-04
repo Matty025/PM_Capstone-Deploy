@@ -166,5 +166,157 @@ def get_obd_data():
 def index():
     return jsonify({"status": "ok", "message": "Server running."}), 200
 
+@app.route('/train_model', methods=['POST'])
+def train_model():
+    try:
+        data = request.get_json()
+        motorcycle_id = data.get("motorcycle_id")
+        brand = data.get("brand")
+
+        if not motorcycle_id or not brand:
+            return jsonify({"status": "error", "message": "Missing motorcycle_id or brand"}), 400
+
+        # Normalize brand folder name
+        brand_folder = brand.strip().replace(" ", "_").lower()
+
+        # Use Python interpreter from current environment
+        python_exe = sys.executable
+
+        # Construct the command
+        cmd = [
+            python_exe,
+            "train_idle_model.py",
+            "--motorcycle_id", str(motorcycle_id),
+            "--brand", brand_folder,
+            "--minutes", "43200"
+        ]
+
+        print(f"[DEBUG] Running command: {' '.join(cmd)}")
+
+        # Run the command and capture output
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        print("[DEBUG] STDOUT:", result.stdout)
+        print("[DEBUG] STDERR:", result.stderr)
+
+        if result.returncode != 0:
+            return jsonify({
+                "status": "error",
+                "message": result.stderr or "Training script failed"
+            }), 500
+
+        return jsonify({
+            "status": "success",
+            "message": result.stdout or "Model trained successfully"
+        })
+
+    except Exception as e:
+        print("[TRAIN_MODEL ERROR]", str(e))
+        return jsonify({"status": "error", "message": str(e)}), 500
+# ------------------------------------------------------------
+#  🔄  NEW: Recent‑data endpoint  (table on the frontend)
+# ------------------------------------------------------------
+@app.route("/recent-data", methods=["POST"])
+def recent_data():
+    body          = request.get_json(force=True) or {}
+    motorcycle_id = body.get("motorcycle_id")
+    minutes       = int(body.get("minutes", 30))
+    if not motorcycle_id:
+        return jsonify({"status":"error","error_message":"motorcycle_id is required"}), 400
+    try:
+        rows = get_recent_data(motorcycle_id, minutes)
+        return jsonify({"status":"ok","rows":rows}), 200
+    except Exception as exc:
+        return jsonify({"status":"error","error_message":str(exc)}), 500
+# -----------------------------------------------------------
+# ------------------------------------------------------------
+#  🔮  ML /predict endpoint  (anomaly suggestion)
+@app.route('/predict', methods=['POST'])
+def predict():
+    data = request.get_json()
+    motorcycle_id = str(data.get('motorcycle_id'))
+    brand = data.get('brand')
+    model = data.get('model')  # ✅ new
+
+    if not motorcycle_id or not brand or not model:
+        return jsonify({"status": "error", "message": "Missing motorcycle_id, brand, or model"}), 400
+
+    brand_folder = brand.strip().replace(" ", "_").lower()
+    model_name   = model.strip().replace(" ", "_").lower()
+
+    model_path = os.path.join("models", brand_folder, f"idle_{motorcycle_id}.pkl")
+
+    if not os.path.exists(model_path):
+        return jsonify({
+            "status": "error",
+            "message": f"Model not found for motorcycle_id {motorcycle_id} → {model_path}"
+        }), 404
+
+    try:
+        result = detect_anomalies(
+            motorcycle_id=motorcycle_id,
+            brand=brand_folder,
+            model=model_name,  # ✅ passed to anomaly_model
+            mode="idle",
+            minutes=30
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Prediction failed: {str(e)}"
+        }), 500
+
+# ----------------------------------this is the CSV routes for manual upload-------------------------
+@app.route('/predict-from-csv', methods=['POST'])
+def predict_from_csv():
+    try:
+        file = request.files["file"]
+        brand = request.form["brand"]
+        model = request.form["model"]
+        motorcycle_id = request.form["motorcycle_id"]
+
+        if not file:
+            return jsonify({"status": "error", "message": "No file provided"}), 400
+
+        import pandas as pd
+        import numpy as np
+        import anomaly_model
+        from anomaly_model import detect_anomalies, FEATURES
+
+        df = pd.read_csv(file)
+
+        # Optional: clean bad rows
+        df = df.replace(0, np.nan).dropna()
+        for col in FEATURES:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        df["_time"] = pd.Timestamp.now()  # dummy time column
+
+        # Monkey patch only for this request
+        original_get_window_df = anomaly_model._get_window_df  # save original
+
+        def patched_get_window_df(*_, **__):
+            return df
+
+        anomaly_model._get_window_df = patched_get_window_df
+
+        try:
+            result = detect_anomalies(
+                motorcycle_id=motorcycle_id,
+                brand=brand,
+                model=model,
+                mode="idle",
+                minutes=30
+            )
+        finally:
+            anomaly_model._get_window_df = original_get_window_df  # restore original
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
