@@ -25,14 +25,6 @@ app = Flask(__name__)
 
 CORS(app, resources={r"/*": {"origins": "https://preventive-maintenance-ml.onrender.com"}}, supports_credentials=True)
 app.register_blueprint(report_api)
-@app.after_request
-def after_request(response):
-    response.headers["Access-Control-Allow-Origin"] = "https://preventive-maintenance-ml.onrender.com"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    return response
-
 # Optional but useful: Add CORS headers to all responses
 @app.after_request
 def after_request(response):
