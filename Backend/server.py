@@ -1,67 +1,37 @@
-import sys
-import os
-
-# ─────────────── Load .env Variables ───────────────
-from dotenv import load_dotenv
-load_dotenv()
-
-# Allow importing sibling files like anomaly_model.py
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import paho.mqtt.client as mqttP
+import paho.mqtt.client as mqtt
 import json
 import subprocess
+import os
 import threading
+import sys
 import psutil
 from anomaly_model import detect_anomalies
 import joblib
 
-from influx_query import get_recent_data
-from report_api import report_api  # Blueprint for /oil-history, /daily, /weekly
+
+# ====  ML & DB helpers  ====
+from anomaly_model   import detect_anomalies
+from influx_query    import get_recent_data   # <-- your cleaned‑data helper
+
+from report_api import report_api  # 👈 import your Blueprint
+
 
 app = Flask(__name__)
+CORS(app)  # Allow CORS for frontend access
+app.register_blueprint(report_api)  # 👈 attach /reports/daily and /weekly routes
 
-CORS(app, resources={r"/*": {"origins": [
-    "https://preventive-maintenance-ml.onrender.com",
-    " https://slick-doodles-admire.loca.lt"
-]}}, supports_credentials=True)
+# MQTT broker settings
+MQTT_BROKER = "broker.hivemq.com"
+MQTT_PORT = 1883
+MQTT_TOPIC = "obd/data"
 
-app.register_blueprint(report_api)
-# Optional but useful: Add CORS headers to all responses
-@app.after_request
-def after_request(response):
-    origin = request.headers.get("Origin")
-    allowed_origins = [
-        "https://preventive-maintenance-ml.onrender.com",
-        "https://slick-doodles-admire.loca.lt"
-    ]
-    if origin in allowed_origins:
-        response.headers.add("Access-Control-Allow-Origin", origin)
-    response.headers.add("Access-Control-Allow-Credentials", "true")
-    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-    response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-    return response
-
-print("✅ Server is starting...")
-print(f"📂 Current working dir: {os.getcwd()}")
-print(f"📄 Files: {os.listdir(os.path.dirname(__file__))}")
-
-# ─────────────── MQTT CONFIG ───────────────
-from urllib.parse import urlparse
-
-mqtt_url = os.getenv("MQTT_BROKER_URL", "mqtt://broker.hivemq.com:1883")
-parsed = urlparse(mqtt_url)
-
-MQTT_BROKER = parsed.hostname or "test.mosquitto.org"
-MQTT_PORT = parsed.port or 8081
-MQTT_TRANSPORT = "websockets" if parsed.scheme in ["ws", "wss"] else "tcp"
-MQTT_TOPIC = os.getenv("MQTT_TOPIC", "obd/data")
-
+# Store the latest OBD data
 latest_obd_data = {}
-obd_process = None
+obd_process = None  # Single instance tracking
 
+# Kill any running obddata.py process when the server starts
 def kill_existing_obd_process():
     for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
         try:
@@ -74,52 +44,51 @@ def kill_existing_obd_process():
 
 kill_existing_obd_process()
 
-# ─────────────── MQTT HANDLERS ───────────────
+# MQTT callback when a message is received
 def on_message(client, userdata, msg):
     global latest_obd_data
     try:
         latest_obd_data = json.loads(msg.payload.decode("utf-8"))
+        # print(f"📡 MQTT Received: {latest_obd_data}")
     except Exception as e:
         print(f"❌ MQTT message decode error: {e}")
 
+# MQTT logging
 def on_log(client, userdata, level, buf):
     print(f"[MQTT LOG] {buf}")
 
+# Start MQTT client in a background thread
 def start_mqtt():
-    print(f"[MQTT] Connecting to {MQTT_BROKER}:{MQTT_PORT} using {MQTT_TRANSPORT}")
-    client = mqttP.Client(transport=MQTT_TRANSPORT)
+    client = mqtt.Client()
     client.on_message = on_message
     client.on_log = on_log
-    try:
-        client.connect(MQTT_BROKER, MQTT_PORT, 60)
-        client.subscribe(MQTT_TOPIC)
-        client.loop_start()
-    except Exception as e:
-        print(f"❌ MQTT Connection error: {e}")
+    client.connect(MQTT_BROKER, MQTT_PORT, 60)
+    client.subscribe(MQTT_TOPIC)
+    client.loop_forever()
 
 mqtt_thread = threading.Thread(target=start_mqtt, daemon=True)
 mqtt_thread.start()
 
+# Function to stream subprocess output
 def stream_output(pipe, name):
-    for line in iter(pipe.readline, ''):
+    for line in iter(pipe.readline, ''):  # '' is the sentinel for end of stream
         print(f"[{name}] {line.rstrip()}")
 
-@app.route("/start-obd", methods=["POST", "OPTIONS"])
+@app.route("/start-obd", methods=["POST"])
 def start_obd():
     global obd_process
-
-    if request.method == "OPTIONS":
-        return '', 204
 
     if obd_process and obd_process.poll() is None:
         return jsonify({"message": "OBD data collection already running", "pid": obd_process.pid}), 200
 
+    # Read motorcycle_id from JSON
     data = request.get_json() or {}
     motorcycle_id = data.get("motorcycle_id")
 
     print(f"🟢 Starting OBD data collection for motorcycle_id={motorcycle_id}")
 
     try:
+        # Start subprocess
         args = [sys.executable, "obddata.py"]
         if motorcycle_id:
             args.append(str(motorcycle_id))
@@ -128,9 +97,10 @@ def start_obd():
             args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            universal_newlines=True
+            universal_newlines=True  # Ensures stdout/stderr are text, not bytes
         )
 
+        # Stream output asynchronously
         threading.Thread(target=stream_output, args=(obd_process.stdout, "STDOUT"), daemon=True).start()
         threading.Thread(target=stream_output, args=(obd_process.stderr, "STDERR"), daemon=True).start()
 
@@ -139,12 +109,9 @@ def start_obd():
     except Exception as e:
         return jsonify({"error": f"Failed to start obddata.py: {e}"}), 500
 
-@app.route("/stop-obd", methods=["GET", "OPTIONS"])
+@app.route("/stop-obd", methods=["GET"])
 def stop_obd():
     global obd_process
-
-    if request.method == "OPTIONS":
-        return '', 204
 
     if obd_process and obd_process.poll() is None:
         print(f"🛑 Stopping OBD process (PID: {obd_process.pid})...")
@@ -161,13 +128,9 @@ def stop_obd():
 @app.route("/obd-data", methods=["GET"])
 def get_obd_data():
     return jsonify(latest_obd_data)
-
-# Keep the rest of the training and prediction routes unchanged...
-# (They remain as you pasted earlier.)
-
-@app.route("/")
-def index():
-    return jsonify({"status": "ok", "message": "Server running."}), 200
+# ------------------------------------------------------------
+#  this will save the Model of your current motorcycle
+# ------------------------------------------------------------
 
 @app.route('/train_model', methods=['POST'])
 def train_model():
@@ -321,5 +284,6 @@ def predict_from_csv():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, port=5000)
