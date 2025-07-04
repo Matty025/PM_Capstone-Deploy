@@ -57,7 +57,7 @@ const fetchOilHistory = useCallback(async () => {
   try {
     setLoading(true);
     const res = await axios.get(
-  `${process.env.REACT_APP_NODE_SERVER_URL}/oil-history?motorcycle_id=${motorcycle.id}`
+  `${process.env.REACT_APP_API_URL}/oil-history?motorcycle_id=${motorcycle.id}`
 );
 
     const data = res.data;
@@ -121,7 +121,7 @@ useEffect(() => {
     }
 
     try {
-await axios.post(`${process.env.REACT_APP_NODE_SERVER_URL}/oil-change`, {
+await axios.post(`${process.env.REACT_APP_API_URL}/oil-change`, {
         motorcycle_id: motorcycle.id,
         odometer_km,
         date_of_oil_change:

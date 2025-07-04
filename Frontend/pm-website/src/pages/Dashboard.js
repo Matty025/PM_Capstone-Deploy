@@ -17,7 +17,7 @@
 // 🔁 Place this with other imports
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { BASE_URL } from "../config";
+import { PYTHON_SERVER_URL } from "../config";
 
   ChartJS.register(
     CategoryScale,
@@ -154,7 +154,7 @@ const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
 const handleStartOBD = async () => {
   toast.info("🔄 Starting OBD connection...");
   try {
-      const res = await axios.post(`${BASE_URL}/start-obd`, {
+      const res = await axios.post(`${PYTHON_SERVER_URL}/start-obd`, {
       motorcycle_id: motorcycle?.id,
     });
 
@@ -174,7 +174,7 @@ const handleStartOBD = async () => {
       // Optional retry logic
       setTimeout(async () => {
         try {
-            const retryRes = await axios.post(`${BASE_URL}/start-obd`, {
+            const retryRes = await axios.post(`${PYTHON_SERVER_URL}/start-obd`, {
             motorcycle_id: motorcycle?.id,
           });
           const retryMsg = retryRes.data?.message || "";
@@ -197,7 +197,7 @@ const handleStartOBD = async () => {
 const handleStopOBD = async () => {
   toast.info("🛑 Stopping OBD connection...");
   try {
-    const res = await axios.get(`${BASE_URL}/stop-obd`);
+    const res = await axios.get(`${PYTHON_SERVER_URL}/stop-obd`);
     const msg = res.data?.message || "";
 
     if (msg.includes("stopped")) {

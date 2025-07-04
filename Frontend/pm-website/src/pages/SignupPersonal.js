@@ -30,7 +30,7 @@ function SignupMotorcycle() {
     const userId = localStorage.getItem("userId");
     const token = localStorage.getItem("token");
 
-    fetch(`${process.env.REACT_APP_NODE_SERVER_URL}/get-motorcycles?userId=${userId}`, {
+    fetch(`${process.env.REACT_APP_API_URL}/get-motorcycles?userId=${userId}`, {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -88,7 +88,7 @@ function SignupMotorcycle() {
     }
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_NODE_SERVER_URL}/signup-motorcycle`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/signup-motorcycle`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
