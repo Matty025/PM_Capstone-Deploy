@@ -17,6 +17,7 @@
 // 🔁 Place this with other imports
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { PYTHON_SERVER_URL } from "../config.js";
 
   ChartJS.register(
     CategoryScale,
