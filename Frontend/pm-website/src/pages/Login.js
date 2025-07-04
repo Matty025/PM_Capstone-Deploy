@@ -79,9 +79,16 @@ function Login() {
 
           <button onClick={handleLogin}>Login</button>
 
-          <p>
-            Don't have an account? <Link to="/signup-personal">Sign up</Link>
-          </p>
+        <p>
+  Don’t have an account?{" "}
+  <span
+    onClick={() => navigate("/signup-personal")}
+    style={{ color: "blue", cursor: "pointer", textDecoration: "underline" }}
+  >
+    Sign up
+  </span>
+</p>
+
         </div>
       </div>
     </div>
