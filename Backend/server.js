@@ -13,8 +13,15 @@ const port = process.env.PORT || 3001;
 // ─────────── InfluxDB Setup ───────────
 const influxUrl = process.env.INFLUX_URL || "https://us-east-1-1.aws.cloud2.influxdata.com";
 const influxToken = process.env.INFLUX_TOKEN;
-const influxOrg = process.env.INFLUX_ORG || "6f21ef7f4355d0d";
+const influxOrg = process.env.INFLUX_ORG || "26f21ef7f4355d0d"; // ✅ Your actual org
 const influxBucket = process.env.INFLUX_BUCKET || "MotorcycleOBDData";
+
+if (!influxUrl || !influxToken || !influxOrg || !influxBucket) {
+  console.error("❌ Missing one or more InfluxDB environment variables");
+  process.exit(1);
+}
+
+const { InfluxDB, Point } = require("@influxdata/influxdb-client");
 
 const influxDB = new InfluxDB({ url: influxUrl, token: influxToken });
 const writeApi = influxDB.getWriteApi(influxOrg, influxBucket, "ms");
@@ -24,16 +31,18 @@ app.use(cors());
 app.use(express.json());
 
 // ─────────── PostgreSQL Setup ───────────
+// ─────────── PostgreSQL Setup ───────────
 const pool = new Pool({
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
   database: process.env.DB_NAME,
   password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
+  port: parseInt(process.env.DB_PORT, 10), // ✅ Ensure it's a number
   ssl: {
-    rejectUnauthorized: false,
+    rejectUnauthorized: false, // ✅ For Render-hosted PostgreSQL with SSL
   },
 });
+
 
 // Check DB connection
 pool.query("SELECT NOW()", (err) => {
