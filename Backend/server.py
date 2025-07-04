@@ -22,7 +22,7 @@ from influx_query import get_recent_data
 from report_api import report_api  # Blueprint for /oil-history, /daily, /weekly
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "https://preventive-maintenance-ml.onrender.com"}}, supports_credentials=True)
 app.register_blueprint(report_api)
 
 print("✅ Server is starting...")
