@@ -1,4 +1,5 @@
 require("dotenv").config();
+console.log("Loaded JWT_SECRET:", process.env.JWT_SECRET); // ← Add this line
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
@@ -92,21 +93,32 @@ app.post("/signup-personal", async (req, res) => {
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log("Client login request:", email, password);
+
     const result = await pool.query("SELECT id, email, password FROM users WHERE email = $1", [email]);
 
-    if (result.rows.length === 0 || password.trim() !== result.rows[0].password.trim()) {
+    if (result.rows.length === 0) {
+      console.log("❌ Email not found in DB");
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const user = result.rows[0];
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    console.log("DB password:", user.password);
+    console.log("Entered password:", password);
 
+    if (password.trim() !== user.password.trim()) {
+      console.log("❌ Password does not match");
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: "1h" });
     res.json({ token, userId: user.id, email: user.email });
   } catch (error) {
-    console.error("🔥 Login error:", error);
+    console.error("🔥 Login Error:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
 
 app.get("/get-user", authenticateToken, async (req, res) => {
   try {

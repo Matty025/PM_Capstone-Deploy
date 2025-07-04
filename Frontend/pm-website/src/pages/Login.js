@@ -42,7 +42,7 @@ function Login() {
           toast.error("Unexpected server response. Please try again.");
         }
       } else {
-        toast.error(data.error || "Login failed. Please try again.");
+        toast.error(data.error || data.message || "Login failed. Please try again.");
       }
     } catch (err) {
       toast.error("🚫 Error connecting to server. Please try again.");
