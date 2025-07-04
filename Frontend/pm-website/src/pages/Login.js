@@ -1,5 +1,6 @@
+// pages/Login.js
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import "./Login.css";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -79,16 +80,15 @@ function Login() {
 
           <button onClick={handleLogin}>Login</button>
 
-        <p>
-  Don’t have an account?{" "}
-  <span
-    onClick={() => navigate("/signup-personal")}
-    style={{ color: "blue", cursor: "pointer", textDecoration: "underline" }}
-  >
-    Sign up
-  </span>
-</p>
-
+          <p>
+            Don’t have an account?{" "}
+            <span
+              onClick={() => navigate("/signup-personal")}
+              style={{ color: "blue", cursor: "pointer", textDecoration: "underline" }}
+            >
+              Sign up
+            </span>
+          </p>
         </div>
       </div>
     </div>

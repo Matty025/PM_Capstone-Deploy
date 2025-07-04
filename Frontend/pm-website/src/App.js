@@ -1,3 +1,4 @@
+// App.js
 import React from "react";
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
@@ -20,11 +21,9 @@ function App() {
           <Route path="/signup-motorcycle" element={<SignupMotorcycle />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/reports" element={<Reports />} />
-          <Route
-            path="/predictivemaintenance"
-            element={<PredictiveMaintenance />}
-          />
+          <Route path="/predictivemaintenance" element={<PredictiveMaintenance />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="*" element={<div>404 - Page Not Found</div>} />
         </Routes>
       </div>
     </Router>
