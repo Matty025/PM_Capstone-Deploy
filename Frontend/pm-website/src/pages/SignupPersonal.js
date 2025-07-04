@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import styles from "./SignupPersonal.module.css"; // ✅ Make sure this file exists
+import styles from "./Signup.module.css"; // ✅ Make sure this file exists
 
 function SignupPersonal() {
   const navigate = useNavigate();
