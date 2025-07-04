@@ -23,14 +23,25 @@ from report_api import report_api  # Blueprint for /oil-history, /daily, /weekly
 
 app = Flask(__name__)
 
-CORS(app, resources={r"/*": {"origins": "https://preventive-maintenance-ml.onrender.com"}}, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": [
+    "https://preventive-maintenance-ml.onrender.com",
+    "https://03f4-175-176-24-156.ngrok-free.app"
+]}}, supports_credentials=True)
+
 app.register_blueprint(report_api)
 # Optional but useful: Add CORS headers to all responses
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', 'https://preventive-maintenance-ml.onrender.com')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    origin = request.headers.get("Origin")
+    allowed_origins = [
+        "https://preventive-maintenance-ml.onrender.com",
+        "https://03f4-175-176-24-156.ngrok-free.app"
+    ]
+    if origin in allowed_origins:
+        response.headers.add("Access-Control-Allow-Origin", origin)
+    response.headers.add("Access-Control-Allow-Credentials", "true")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
     return response
 
 print("✅ Server is starting...")
