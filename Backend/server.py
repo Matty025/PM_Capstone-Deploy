@@ -25,7 +25,7 @@ app = Flask(__name__)
 
 CORS(app, resources={r"/*": {"origins": [
     "https://preventive-maintenance-ml.onrender.com",
-    "https://0491-175-176-24-83.ngrok-free.app"
+    "https://7a2e-175-176-24-83.ngrok-free.app"
 ]}}, supports_credentials=True)
 
 app.register_blueprint(report_api)
@@ -35,7 +35,7 @@ def after_request(response):
     origin = request.headers.get("Origin")
     allowed_origins = [
         "https://preventive-maintenance-ml.onrender.com",
-        "https://0491-175-176-24-83.ngrok-free.app"
+        "https://7a2e-175-176-24-83.ngrok-free.app "
     ]
     if origin in allowed_origins:
         response.headers.add("Access-Control-Allow-Origin", origin)
@@ -322,4 +322,4 @@ def predict_from_csv():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    app.run(debug=True, host="0.0.0.0", port=5000)
