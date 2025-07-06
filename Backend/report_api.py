@@ -2,6 +2,8 @@
 from flask import Blueprint, jsonify, request
 from influxdb_client import InfluxDBClient
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 report_api = Blueprint("report_api", __name__)
 
