@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: serverjs-backend
+    env: node
+    rootDir: Backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: DB_USER
+        fromEnvVar: DB_USER
+      - key: DB_PASSWORD
+        fromEnvVar: DB_PASSWORD
+      - key: DB_NAME
+        fromEnvVar: DB_NAME
+      - key: DB_HOST
+        fromEnvVar: DB_HOST
+      - key: DB_PORT
+        fromEnvVar: DB_PORT
+      - key: JWT_SECRET
+        fromEnvVar: JWT_SECRET
+      - key: INFLUX_URL
+        fromEnvVar: INFLUX_URL
+      - key: INFLUX_TOKEN
+        fromEnvVar: INFLUX_TOKEN
+      - key: INFLUX_ORG
+        fromEnvVar: INFLUX_ORG
+      - key: INFLUX_BUCKET
+        fromEnvVar: INFLUX_BUCKET
+      - key: MQTT_BROKER_URL
+        fromEnvVar: MQTT_BROKER_URL
