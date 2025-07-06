@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import {
   PieChart,
   Pie,
@@ -21,7 +20,7 @@ import html2canvas from "html2canvas";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import RowAnomalyLineChart from "./RowAnomalyLineChart";
-import { mqttClient as client, BASE_URL } from "../config"; // ✅ fixed import
+import { mqttClient as client } from "../config"; // ✅ fixed import
 import "./PredictiveMaintenance.css";
 
 function PredictiveMaintenance() {
@@ -97,10 +96,12 @@ useEffect(() => {
   const fetchRows = async (motorcycle_id, mins, { silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const { data } = await axios.post(`${BASE_URL}/recent-data`, {
-        motorcycle_id,
-        minutes: mins,
-      });
+mqttClient.publish("obd/command", JSON.stringify({
+  command: "recent-data",
+  motorcycle_id: motorcycle.id,
+  minutes: 30, // or any value you want
+}));
+
       if (data.status === "ok") {
         setRows(data.rows);
         setAnalysis(null);
