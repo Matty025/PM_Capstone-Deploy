@@ -2,7 +2,6 @@
   import mqtt from "mqtt";
   import { useNavigate } from "react-router-dom";
   import { Line } from "react-chartjs-2";
-  import axios from "axios";
   import {
     Chart as ChartJS,
     CategoryScale,
@@ -102,6 +101,7 @@ import "react-toastify/dist/ReactToastify.css";
   reconnectPeriod: 5000,
   keepalive: 60,
 });
+
 client.on("connect", () => {
   console.log("✅ Connected to MQTT broker");
   client.subscribe("obd/data");

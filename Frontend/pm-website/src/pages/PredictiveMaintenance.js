@@ -120,7 +120,7 @@ const fetchRows = async (motorcycle_id, mins, { silent = false } = {}) => {
     return () => {
       client.off("message", handleMessage);
     };
-  }, [client]);
+  }, []);
 
     const runPrediction = () => {
       if (!client || !client.connected) {

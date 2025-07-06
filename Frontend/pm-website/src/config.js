@@ -8,9 +8,10 @@ const brokerUrl = process.env.REACT_APP_MQTT_BROKER_URL;
 // MQTT Client setup
 const mqttClient = mqtt.connect(brokerUrl, {
   clientId: "react-" + Math.random().toString(16).substr(2, 8),
-  clean: true,
+  protocol: "wss",            // 🔒 Force secure WebSocket
   reconnectPeriod: 1000,
   connectTimeout: 30 * 1000,
+  clean: true,
 });
 
 mqttClient.on("connect", () => {
