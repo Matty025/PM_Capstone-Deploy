@@ -34,7 +34,7 @@ EMQX_PORT = int(os.getenv("MQTT_BROKER_PORT", 1883))  # default to 1883
 MQTT_COMMAND_TOPIC = "obd/command"
 MQTT_STATUS_TOPIC = "obd/status"
 
-mqtt_client = mqtt.Client()
+mqtt_client = mqtt.Client(protocol=mqtt.MQTTv311)
 mqtt_client.username_pw_set(
     os.getenv("MQTT_USERNAME"),
     os.getenv("MQTT_PASSWORD")
@@ -140,7 +140,7 @@ def start_mqtt():
     print(f"📡 Connecting to EMQX at {EMQX_HOST}:{EMQX_PORT} with TLS...")
     mqtt_client.on_connect = on_mqtt_connect
     mqtt_client.on_message = on_mqtt_message
-    mqtt_client.tls_set(ca_certs="path/to/emqx_ca.crt", tls_version=ssl.PROTOCOL_TLSv1_2)
+    mqtt_client.tls_set(tls_version=ssl.PROTOCOL_TLSv1_2)
     mqtt_client.connect(EMQX_HOST, EMQX_PORT)
     mqtt_client.loop_start()
 

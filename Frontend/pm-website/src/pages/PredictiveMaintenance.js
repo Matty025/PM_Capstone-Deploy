@@ -38,7 +38,6 @@ import { BASE_URL } from "../config"; // or wherever your config.js is located
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [uploadedFile, setUploadedFile] = useState(null);
     const [useUploadedFile, setUseUploadedFile] = useState(false);
-
 useEffect(() => {
   const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
   if (!selected) {
@@ -79,48 +78,68 @@ const fetchRows = async (motorcycle_id, mins, { silent = false } = {}) => {
   }, [useUploadedFile]);
 
   // use effect and for run prediction 
-  useEffect(() => {
-    if (!client) return;
+useEffect(() => {
+  if (!client) return;
 
-    const handleMessage = (topic, message) => {
-      try {
-        if (topic === "obd/status") {
-          const payload = JSON.parse(message.toString());
+  const handleMessage = (topic, message) => {
+    try {
+      if (topic === "obd/status") {
+        const payload = JSON.parse(message.toString());
 
-          if (payload?.status === "error") {
-            toast.error(`❌ ${payload.message}`);
-            setLoading(false);
-            return;
-          }
-
-          if (payload.type === "predict-from-csv") {
-            setAnalysis(payload.result);
-            setRows([]);
-            toast.success("✅ Analysis complete using uploaded CSV");
-            setLoading(false);
-          }
-
-          if (payload.type === "predict") {
-            setAnalysis(payload);
-            setRows([]);
-            toast.success("✅ Analysis complete using live data");
-            setLoading(false);
-          }
+        if (payload?.status === "error") {
+          toast.error(`❌ ${payload.message}`);
+          setLoading(false);
+          return;
         }
-      } catch (err) {
-        console.error("❌ MQTT message handling error:", err);
-        toast.error("❌ Invalid MQTT response");
+
+        if (payload.type === "predict-from-csv") {
+          setAnalysis(payload.result);
+          setRows([]);
+          toast.success("✅ Analysis complete using uploaded CSV");
+        }
+
+        if (payload.type === "predict") {
+          setAnalysis(payload);
+          setRows([]);
+          toast.success("✅ Analysis complete using live data");
+        }
+
         setLoading(false);
       }
-    };
+    } catch (err) {
+      console.error("❌ MQTT message handling error:", err);
+      toast.error("❌ Invalid MQTT response");
+      setLoading(false);
+    }
+  };
 
-    client.on("message", handleMessage);
+  const handleConnect = () => {
+    console.log("✅ MQTT connected");
+    toast.success("📡 Connected to EMQX MQTT broker");
     client.subscribe("obd/status");
+  };
 
-    return () => {
-      client.off("message", handleMessage);
-    };
-  }, []);
+  const handleError = (err) => {
+    console.error("❌ MQTT error", err);
+    toast.error("MQTT connection error");
+  };
+
+  const handleClose = () => {
+    toast.warn("⚠️ MQTT disconnected");
+  };
+
+  client.on("connect", handleConnect);
+  client.on("error", handleError);
+  client.on("close", handleClose);
+  client.on("message", handleMessage);
+
+  return () => {
+    client.off("connect", handleConnect);
+    client.off("error", handleError);
+    client.off("close", handleClose);
+    client.off("message", handleMessage);
+  };
+}, []);
 
     const runPrediction = () => {
       if (!client || !client.connected) {
@@ -148,19 +167,20 @@ const fetchRows = async (motorcycle_id, mins, { silent = false } = {}) => {
         if (uploadedFile && useUploadedFile) {
           toast.info("📁 Using uploaded CSV file for analysis.");
 
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64String = btoa(reader.result);
-            client.publish("obd/command", JSON.stringify({
-              command: "predict-from-csv",
-              motorcycle_id: id,
-              brand,
-              model,
-              file_base64: base64String,
-            }));
-            toast.info("📤 Sent file for analysis via MQTT.");
-          };
-          reader.readAsBinaryString(uploadedFile);
+const reader = new FileReader();
+reader.onload = () => {
+  const base64String = reader.result.split(',')[1]; // remove "data:text/csv;base64,"
+  client.publish("obd/command", JSON.stringify({
+    command: "predict-from-csv",
+    motorcycle_id: id,
+    brand,
+    model,
+    file_base64: base64String,
+  }));
+  toast.info("📤 Sent file for analysis via MQTT.");
+};
+reader.readAsDataURL(uploadedFile);  // ✅ more robust and compatible
+
         } else {
           setUploadedFile(null);
           setUseUploadedFile(false);

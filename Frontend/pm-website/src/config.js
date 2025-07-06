@@ -1,28 +1,17 @@
-// All imports at the top
+// config.js
 import mqtt from "mqtt";
 
-// Constants
-export const BASE_URL = process.env.REACT_APP_API_URL;
-const brokerUrl = process.env.REACT_APP_MQTT_BROKER_URL;
+// Backend base URL (used for axios requests)
+export const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
-// MQTT Client setup
-const mqttClient = mqtt.connect(brokerUrl, {
-  clientId: "react-" + Math.random().toString(16).substr(2, 8),
-  protocol: "wss",            // 🔒 Force secure WebSocket
-  reconnectPeriod: 1000,
-  connectTimeout: 30 * 1000,
+// MQTT options
+const options = {
   username: process.env.REACT_APP_MQTT_USERNAME,
   password: process.env.REACT_APP_MQTT_PASSWORD,
+  reconnectPeriod: 5000,
+  keepalive: 60,
   clean: true,
-});
+};
 
-mqttClient.on("connect", () => {
-  console.log("✅ MQTT connected");
-});
-
-mqttClient.on("error", (err) => {
-  console.error("❌ MQTT connection error:", err);
-});
-
-// Exports
-export { mqttClient };
+// Connect to EMQX over secure WebSocket (wss)
+export const mqttClient = mqtt.connect(process.env.REACT_APP_MQTT_BROKER_URL, options);
