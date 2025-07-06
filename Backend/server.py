@@ -20,14 +20,17 @@ from influx_query import get_recent_data
 from report_api import report_api
 from dotenv import load_dotenv
 load_dotenv()
+load_dotenv()
+print(f"📄 .env loaded: MQTT_HOST={os.getenv('MQTT_BROKER_HOST')}, PORT={os.getenv('MQTT_BROKER_PORT')}")
 
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(report_api)
 
 # ───── MQTT EMQX Setup ─────
-EMQX_HOST = os.getenv("MQTT_HOST")
-EMQX_PORT = int(os.getenv("MQTT_PORT", 8883))
+import os
+EMQX_HOST = os.getenv("MQTT_BROKER_HOST")
+EMQX_PORT = int(os.getenv("MQTT_BROKER_PORT", 1883))  # default to 1883
 MQTT_COMMAND_TOPIC = "obd/command"
 MQTT_STATUS_TOPIC = "obd/status"
 
@@ -130,6 +133,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
     client.subscribe(MQTT_COMMAND_TOPIC)
 
 def start_mqtt():
+    print(f"📡 Connecting to EMQX at {EMQX_HOST}:{EMQX_PORT} with TLS...")
     mqtt_client.on_connect = on_mqtt_connect
     mqtt_client.on_message = on_mqtt_message
     mqtt_client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLSv1_2)
@@ -152,7 +156,7 @@ def start_obd_internal(motorcycle_id=None):
         args = [sys.executable, "obddata.py"]
         if motorcycle_id:
             args.append(str(motorcycle_id))
-
+        print(f"🛠️ Starting subprocess: {' '.join(args)}")  # in start_obd_internal()
         obd_process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         publish_status({"status": "started", "pid": obd_process.pid})
     except Exception as e:
@@ -176,6 +180,7 @@ def train_model_internal(motorcycle_id, brand):
             "--brand", brand_folder,
             "--minutes", "43200"
         ]
+        print(f"🛠️ Training model with: {' '.join(cmd)}")  # in train_model_internal()
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode == 0:
             publish_status({"status": "success", "message": "Model trained"})
@@ -186,6 +191,7 @@ def train_model_internal(motorcycle_id, brand):
 
 def predict_internal(motorcycle_id, brand, model):
     try:
+        print(f"🔍 Predicting anomalies for motorcycle {motorcycle_id}, brand={brand}, model={model}")
         return detect_anomalies(
             motorcycle_id=str(motorcycle_id),
             brand=brand,
