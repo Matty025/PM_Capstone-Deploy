@@ -6,11 +6,10 @@ import jsPDF from "jspdf";
 import "react-toastify/dist/ReactToastify.css";
 import "./Reports.css";
 import normalRangesData from "./normal_ranges.json";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ResponsiveContainer, LabelList } from "recharts";
-import { mqttClient } from "../config"; // or "./mqtt" depending on your structure
+import { mqttClient } from "../config";
 
-// ⬇️ COMPONENT
 const Reports = () => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -25,18 +24,16 @@ const Reports = () => {
   const [reportType, setReportType] = useState("daily");
   const [nextDue, setNextDue] = useState({ date: "", km: 0 });
 
-    const closeSidebar = () => setSidebarOpen(false);
-    const handleLogout = () => {
+  const motorcycleRef = useRef(JSON.parse(localStorage.getItem("selectedMotorcycle")) || {});
+
+  const closeSidebar = () => setSidebarOpen(false);
+  const handleLogout = () => {
     localStorage.clear();
     navigate("/");
-  };  
+  };
 
-  // ✅ Move OUTSIDE so it's reusable
   const calculateNextDue = (history) => {
-    if (history.length === 0) {
-      setNextDue({ date: "", km: 0 });
-      return;
-    }
+    if (history.length === 0) return setNextDue({ date: "", km: 0 });
     const last = history[0];
     const lastDate = new Date(last.date_of_oil_change);
     const nextDate = new Date(lastDate);
@@ -47,95 +44,85 @@ const Reports = () => {
     });
   };
 
-const fetchOilHistory = useCallback(async () => {
-  const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
-  if (!motorcycle) {
-    toast.error("No motorcycle selected.");
-    navigate("/signup-motorcycle");
-    return;
-  }
+  const fetchOilHistory = useCallback(async () => {
+    const motorcycle = motorcycleRef.current;
+    if (!motorcycle?.id) {
+      toast.error("No motorcycle selected.");
+      navigate("/signup-motorcycle");
+      return;
+    }
 
-  try {
-    setLoading(true);
-    const res = await axios.get(
-  `${process.env.REACT_APP_API_URL}/oil-history?motorcycle_id=${motorcycle.id}`
-);
+    try {
+      setLoading(true);
+      const res = await axios.get(
+        `${process.env.REACT_APP_API_URL}/oil-history?motorcycle_id=${motorcycle.id}`
+      );
+      const data = res.data;
+      setOilHistory(data);
+      setErrorMsg("");
+      calculateNextDue(data);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Could not fetch oil change history.");
+      toast.error("Failed to fetch oil change history.");
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate]);
 
-    const data = res.data;
-    setOilHistory(data);
-    setErrorMsg("");
-    calculateNextDue(data);
-  } catch (err) {
-    console.error(err);
-    setErrorMsg("Could not fetch oil change history.");
-    toast.error("Failed to fetch oil change history.");
-  } finally {
-    setLoading(false);
-  }
-}, [navigate]); // ✅ Dependency of useCallback
+  const fetchReports = useCallback(() => {
+    const motorcycle = motorcycleRef.current;
+    if (!motorcycle?.id) return;
 
-
-const fetchReports = async () => {
-  const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
-  if (!motorcycle) return;
-
-  const requestReport = (command) =>
-    new Promise((resolve) => {
-      const timeout = setTimeout(() => resolve(null), 5000);
-      const handler = (topic, message) => {
-        const data = JSON.parse(message.toString());
-        if (data.type === command) {
+    const requestReport = (command) =>
+      new Promise((resolve) => {
+        const timeout = setTimeout(() => {
           mqttClient.removeListener("message", handler);
-          clearTimeout(timeout);
-          resolve(data.rows);
-        }
-      };
-      mqttClient.on("message", handler);
-      mqttClient.subscribe("obd/status");
-      mqttClient.publish(
-        "obd/command",
-        JSON.stringify({
+          resolve(null);
+        }, 5000);
+
+        const handler = (topic, message) => {
+          try {
+            const data = JSON.parse(message.toString());
+            if (data.type === command) {
+              mqttClient.removeListener("message", handler);
+              clearTimeout(timeout);
+              resolve(data.rows);
+            }
+          } catch (e) {
+            console.error("Error parsing MQTT message", e);
+          }
+        };
+
+        mqttClient.on("message", handler);
+        mqttClient.subscribe("obd/status");
+        mqttClient.publish("obd/command", JSON.stringify({
           command,
           motorcycle_id: motorcycle.id,
-        })
-      );
+        }));
+      });
+
+    Promise.all([
+      requestReport("report-daily"),
+      requestReport("report-weekly"),
+    ]).then(([daily, weekly]) => {
+      if (!daily || !weekly) {
+        toast.error("Failed to fetch engine reports.");
+        return;
+      }
+      setDailyReport(daily);
+      setWeeklyReport(weekly);
     });
+  }, []);
 
-  const [daily, weekly] = await Promise.all([
-    requestReport("report-daily"),
-    requestReport("report-weekly"),
-  ]);
+  useEffect(() => {
+    fetchOilHistory();
+    fetchReports();
 
-  if (!daily || !weekly) {
-    toast.error("Failed to fetch engine reports.");
-    return;
-  }
-
-  setDailyReport(daily);
-  setWeeklyReport(weekly);
-};
-
-useEffect(() => {
-  fetchOilHistory();
-  fetchReports();
-
-  mqttClient.on("message", (topic, message) => {
-    const payload = JSON.parse(message.toString());
-
-    if (payload.type === "daily-report") {
-      setDailyReport(payload.report);
-    }
-    if (payload.type === "weekly-report") {
-      setWeeklyReport(payload.report);
-    }
-  });
-
-  mqttClient.subscribe("obd/status");
-
-  return () => {
-    mqttClient.unsubscribe("obd/status");
-  };
-}, [fetchOilHistory, fetchReports]);
+    return () => {
+      mqttClient.unsubscribe("obd/status");
+    };
+  }, [fetchOilHistory, fetchReports]);
 
   const openModal = () => {
     setOdoInput("");
@@ -144,8 +131,8 @@ useEffect(() => {
   };
 
   const handleSubmit = async () => {
-    const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
-    if (!motorcycle) return;
+    const motorcycle = motorcycleRef.current;
+    if (!motorcycle?.id) return;
 
     const odometer_km = parseInt(odoInput, 10);
     if (isNaN(odometer_km)) {
@@ -160,79 +147,73 @@ useEffect(() => {
     }
 
     try {
-await axios.post(`${process.env.REACT_APP_API_URL}/oil-change`, {
+      await axios.post(`${process.env.REACT_APP_API_URL}/oil-change`, {
         motorcycle_id: motorcycle.id,
         odometer_km,
-        date_of_oil_change:
-          dateInput || new Date().toISOString().split("T")[0],
+        date_of_oil_change: dateInput || new Date().toISOString().split("T")[0],
       });
 
       toast.success("Oil change logged!");
       setModalOpen(false);
-      fetchOilHistory(); // Refresh table
+      fetchOilHistory();
 
       calculateNextDue([
         {
-          date_of_oil_change:
-            dateInput || new Date().toISOString().split("T")[0],
+          date_of_oil_change: dateInput || new Date().toISOString().split("T")[0],
           odometer_at_change: odometer_km,
         },
         ...oilHistory,
       ]);
 
       const diff = odometer_km - lastOdo;
-      if (diff >= 1000)
-        toast.info("⛽ Time to change your oil (1000 km reached).");
+      if (diff >= 1000) toast.info("⛽ Time to change your oil (1000 km reached).");
     } catch (err) {
       console.error(err);
       toast.error("Failed to log oil change.");
     }
   };
 
-  const selectedReport = reportType === "daily" ? dailyReport : weeklyReport;
-  const reportLabel = reportType === "daily" ? "Daily" : "Weekly";
-const reportData = selectedReport
-  ? [
-      { name: "RPM", value: selectedReport.rpm ?? 0, unit: " RPM" },
-      { name: "Voltage", value: selectedReport.elm_voltage ?? 0, unit: " V" },
-      { name: "Coolant Temp", value: selectedReport.coolant_temp ?? 0, unit: " °C" },
-      { name: "Throttle Pos", value: selectedReport.throttle_pos ?? 0, unit: " %" },
-      { name: "Engine Load", value: selectedReport.engine_load ?? 0, unit: " %" },
-      { name: "Fuel Trim", value: selectedReport.long_fuel_trim_1 ?? 0, unit: " %" },
-    ]
-  : [];
-
-
-
   const handleExportPDF = () => {
     const reportSection = document.getElementById("report-content");
     if (!reportSection) return;
-
     html2canvas(reportSection).then((canvas) => {
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
       const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
       pdf.save("engine-report.pdf");
     });
   };
 
-const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle")) || {};
-const normalizedBrand = motorcycle.brand?.toLowerCase()?.replace(/\s+/g, "_");
-const normalizedModel = motorcycle.model?.toLowerCase()?.replace(/\s+/g, "_");
-const normalValues = normalRangesData?.[normalizedBrand]?.[normalizedModel] || {};
+  const selectedReport = reportType === "daily" ? dailyReport : weeklyReport;
+  const reportLabel = reportType === "daily" ? "Daily" : "Weekly";
 
-const METRIC_LABELS = {
-  rpm: "RPM",
-  coolant_temp: "Coolant Temp",
-  elm_voltage: "Voltage",
-  throttle_pos: "Throttle Position",
-  engine_load: "Engine Load",
-  long_fuel_trim_1: "Long Fuel Trim",
-};
+  const reportData = selectedReport
+    ? [
+        { name: "RPM", value: selectedReport.rpm ?? 0, unit: " RPM" },
+        { name: "Voltage", value: selectedReport.elm_voltage ?? 0, unit: " V" },
+        { name: "Coolant Temp", value: selectedReport.coolant_temp ?? 0, unit: " °C" },
+        { name: "Throttle Pos", value: selectedReport.throttle_pos ?? 0, unit: " %" },
+        { name: "Engine Load", value: selectedReport.engine_load ?? 0, unit: " %" },
+        { name: "Fuel Trim", value: selectedReport.long_fuel_trim_1 ?? 0, unit: " %" },
+      ]
+    : [];
+
+  const motorcycle = motorcycleRef.current;
+  const normalizedBrand = motorcycle.brand?.toLowerCase()?.replace(/\s+/g, "_");
+  const normalizedModel = motorcycle.model?.toLowerCase()?.replace(/\s+/g, "_");
+  const normalValues = normalRangesData?.[normalizedBrand]?.[normalizedModel] || {};
+
+  const METRIC_LABELS = {
+    rpm: "RPM",
+    coolant_temp: "Coolant Temp",
+    elm_voltage: "Voltage",
+    throttle_pos: "Throttle Position",
+    engine_load: "Engine Load",
+    long_fuel_trim_1: "Long Fuel Trim",
+  };
 
   return (
     <div className="dashboardContainers">
