@@ -66,3 +66,10 @@ def weekly_report():
         return jsonify({"error": "Missing motorcycle_id"}), 400
     report = query_aggregated_report("-7d", motorcycle_id)
     return jsonify(report)
+# ─── Exported for MQTT use ───
+
+def get_daily_report(motorcycle_id):
+    return query_aggregated_report("-24h", motorcycle_id)
+
+def get_weekly_report(motorcycle_id):
+    return query_aggregated_report("-7d", motorcycle_id)

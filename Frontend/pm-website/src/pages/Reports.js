@@ -8,6 +8,7 @@ import "./Reports.css";
 import normalRangesData from "./normal_ranges.json";
 import React, { useState, useEffect, useCallback } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ResponsiveContainer, LabelList } from "recharts";
+import { mqttClient } from "../config"; // or "./mqtt" depending on your structure
 
 // ⬇️ COMPONENT
 const Reports = () => {
@@ -74,29 +75,67 @@ const fetchOilHistory = useCallback(async () => {
 }, [navigate]); // ✅ Dependency of useCallback
 
 
-  const fetchReports = async () => {
-    const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
-    if (!motorcycle) return;
+const fetchReports = async () => {
+  const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
+  if (!motorcycle) return;
 
-    try {
-      const dailyRes = await axios.get(
-  `${process.env.REACT_APP_PYTHON_SERVER_URL}/reports/daily?motorcycle_id=${motorcycle.id}`
-);
- const weeklyRes = await axios.get(
-  `${process.env.REACT_APP_PYTHON_SERVER_URL}/reports/weekly?motorcycle_id=${motorcycle.id}`
-);
-      setDailyReport(dailyRes.data);
-      setWeeklyReport(weeklyRes.data);
-    } catch (err) {
-      console.error("Failed to fetch reports", err);
-      toast.error("Failed to fetch engine reports");
-    }
-  };
+  const requestReport = (command) =>
+    new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 5000);
+      const handler = (topic, message) => {
+        const data = JSON.parse(message.toString());
+        if (data.type === command) {
+          mqttClient.removeListener("message", handler);
+          clearTimeout(timeout);
+          resolve(data.rows);
+        }
+      };
+      mqttClient.on("message", handler);
+      mqttClient.subscribe("obd/status");
+      mqttClient.publish(
+        "obd/command",
+        JSON.stringify({
+          command,
+          motorcycle_id: motorcycle.id,
+        })
+      );
+    });
+
+  const [daily, weekly] = await Promise.all([
+    requestReport("report-daily"),
+    requestReport("report-weekly"),
+  ]);
+
+  if (!daily || !weekly) {
+    toast.error("Failed to fetch engine reports.");
+    return;
+  }
+
+  setDailyReport(daily);
+  setWeeklyReport(weekly);
+};
 
 useEffect(() => {
   fetchOilHistory();
   fetchReports();
-}, [fetchOilHistory]); // ✅ ESLint is happy now
+
+  mqttClient.on("message", (topic, message) => {
+    const payload = JSON.parse(message.toString());
+
+    if (payload.type === "daily-report") {
+      setDailyReport(payload.report);
+    }
+    if (payload.type === "weekly-report") {
+      setWeeklyReport(payload.report);
+    }
+  });
+
+  mqttClient.subscribe("obd/status");
+
+  return () => {
+    mqttClient.unsubscribe("obd/status");
+  };
+}, [fetchOilHistory, fetchReports]);
 
   const openModal = () => {
     setOdoInput("");

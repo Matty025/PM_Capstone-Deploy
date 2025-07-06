@@ -1,6 +1,10 @@
 from influxdb_client import InfluxDBClient
 import pandas as pd
 import os 
+
+from dotenv import load_dotenv
+load_dotenv()
+
 # InfluxDB connection config
 INFLUXDB_URL = os.getenv("INFLUX_URL")
 INFLUXDB_TOKEN = os.getenv("INFLUX_TOKEN")

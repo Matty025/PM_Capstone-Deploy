@@ -5,20 +5,19 @@ import json
 import sys
 import paho.mqtt.client as mqtt
 from influxdb_client import InfluxDBClient, Point, WriteOptions
-
-# Enable debug logging
-obd.logger.setLevel(obd.logging.DEBUG)
-
-
 from urllib.parse import urlparse
-mqtt_url = os.getenv("MQTT_BROKER_URL", "mqtt://broker.hivemq.com:1883")
+import ssl
+
+mqtt_url = os.getenv("MQTT_BROKER_URL", "mqtts://ha62a160.ala.asia-southeast1.emqxsl.com:8883")
 parsed = urlparse(mqtt_url)
 
-MQTT_BROKER = parsed.hostname or "broker.hivemq.com"
-MQTT_PORT = parsed.port or 1883
+MQTT_BROKER = parsed.hostname or "ha62a160.ala.asia-southeast1.emqxsl.com"
+MQTT_PORT = parsed.port or 8883
 MQTT_TRANSPORT = "tcp"
 
 mqtt_client = mqtt.Client(transport=MQTT_TRANSPORT, protocol=mqtt.MQTTv311)
+mqtt_client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
+mqtt_client.tls_insecure_set(False)
 
 # InfluxDB settings - update these with your real values
 INFLUXDB_URL = os.getenv("INFLUX_URL")
@@ -37,7 +36,8 @@ MQTT_TOPIC = f"obd/motorcycle/{MOTORCYCLE_ID}/data"
 
 def on_connect(client, userdata, flags, rc):
     print(f"Connected to MQTT broker with result code {rc}")
-
+mqtt_client = mqtt.Client(protocol=mqtt.MQTTv311, transport="tcp")
+mqtt_client.tls_set()  # Enable TLS (no certificate needed if using EMQX default)
 mqtt_client.on_connect = on_connect
 mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 30)
 mqtt_client.loop_start()
