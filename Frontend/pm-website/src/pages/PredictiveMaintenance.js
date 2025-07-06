@@ -94,25 +94,27 @@ useEffect(() => {
   }, [minutes, navigate]);
 
   const fetchRows = async (motorcycle_id, mins, { silent = false } = {}) => {
-    if (!silent) setLoading(true);
-    try {
-mqttClient.publish("obd/command", JSON.stringify({
-  command: "recent-data",
-  motorcycle_id: motorcycle.id,
-  minutes: 30, // or any value you want
-}));
+  if (!silent) setLoading(true);
 
-      if (data.status === "ok") {
-        setRows(data.rows);
-        setAnalysis(null);
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("❌ Failed to load data.");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  };
+  try {
+    client.publish(
+      "obd/command",
+      JSON.stringify({
+        command: "recent-data",
+        motorcycle_id,
+        minutes: mins,
+      })
+    );
+
+    // No need to check data.status here — MQTT will handle response elsewhere
+    setAnalysis(null); // optional reset
+  } catch (err) {
+    console.error("❌ Failed to publish recent-data command:", err);
+    toast.error("❌ Failed to load data.");
+  } finally {
+    if (!silent) setLoading(false);
+  }
+};
 
   useEffect(() => {
     if (!useUploadedFile) {
@@ -271,29 +273,38 @@ mqttClient.publish("obd/command", JSON.stringify({
     document.body.removeChild(link);
   };
 
-  const handleTrainModel = async () => {
-    const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
-    const motorcycle_id = selected?.motorcycle_id || selected?.id;
-    const brand = selected?.brand;
+const handleTrainModel = () => {
+  const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
+  const motorcycle_id = selected?.motorcycle_id || selected?.id;
+  const brand = selected?.brand;
 
-    if (!motorcycle_id || !brand) {
-      toast.warning("⚠️ Missing motorcycle info.");
-      return;
-    }
+  if (!motorcycle_id || !brand) {
+    toast.warning("⚠️ Missing motorcycle info.");
+    return;
+  }
 
-    try {
-      const res = await axios.post(`${BASE_URL}/train_model`, {
+  if (!client || !client.connected) {
+    toast.error("❌ MQTT not connected");
+    return;
+  }
+
+  try {
+    client.publish(
+      "obd/command",
+      JSON.stringify({
+        command: "train_model",
         motorcycle_id,
         brand,
-      });
+      })
+    );
 
-      toast.success("✅ Model trained successfully!");
-      console.log(res.data.message);
-    } catch (err) {
-      console.error(err);
-      toast.error("❌ Training failed. Check server logs.");
-    }
-  };
+    toast.info("🧠 Training model... Please wait.");
+  } catch (err) {
+    console.error("❌ Failed to send training command:", err);
+    toast.error("❌ Training command failed.");
+  }
+};
+
 
 
   const exportPDF = () => {
