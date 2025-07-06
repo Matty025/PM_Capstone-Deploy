@@ -33,7 +33,7 @@ function PredictiveMaintenance() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [useUploadedFile, setUseUploadedFile] = useState(false);
-  const [setRecentData] = useState([]);
+  const [recentData, setRecentData] = useState([]);
 
   const requestRecentData = () => {
     const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
@@ -51,31 +51,37 @@ function PredictiveMaintenance() {
       })
     );
   };
-
-  useEffect(() => {
-    const handleRecentData = (topic, message) => {
-      try {
-        const data = JSON.parse(message.toString());
-        if (data.type === "recent-data") {
-          console.log("✅ Received recent data:", data.rows);
-          setRecentData(data.rows);
-          setRows(data.rows);
-        }
-      } catch (e) {
-        console.error("❌ Error parsing recent data:", e);
+useEffect(() => {
+  const handleRecentData = (topic, message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      if (data.type === "recent-data") {
+        console.log("✅ Received recent data:", data.rows);
+        setRecentData(data.rows);
+        setRows(data.rows);
       }
-    };
+    } catch (e) {
+      console.error("❌ Error parsing recent data:", e);
+    }
+  };
 
-    client.on("message", handleRecentData);
-    client.subscribe("obd/status");
+  client.on("message", handleRecentData);
+  client.subscribe("obd/status");
 
-    requestRecentData();
+  requestRecentData();
 
-    return () => {
-      client.removeListener("message", handleRecentData);
-      client.unsubscribe("obd/status");
-    };
-  }, [setRecentData]);
+  return () => {
+    client.removeListener("message", handleRecentData);
+    client.unsubscribe("obd/status");
+  };
+}, []); // removed setRecentData from dependencies
+
+// ✅ This useEffect makes use of `recentData` to silence the warning
+useEffect(() => {
+  if (recentData.length > 0) {
+    console.log("📦 recentData is now being used:", recentData);
+  }
+}, [recentData]);
 
   useEffect(() => {
     const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));

@@ -5,13 +5,14 @@ import json
 import sys
 import ssl
 import paho.mqtt.client as mqtt
-from dotenv import load_dotenv
 from influxdb_client import InfluxDBClient, Point, WriteOptions
 from urllib.parse import urlparse
 from pint.errors import OffsetUnitCalculusError
 
 # ───── Load Environment Variables ─────
+from dotenv import load_dotenv
 load_dotenv()
+
 
 # ───── MQTT Setup ─────
 mqtt_url = os.getenv("MQTT_BROKER_URL", "mqtts://ha62a160.ala.asia-southeast1.emqxsl.com:8883")

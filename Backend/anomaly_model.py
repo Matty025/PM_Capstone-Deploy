@@ -107,32 +107,40 @@ def _load_model(brand: str, moto_id: str, mode="idle"):
     return bundle["model"], bundle["scaler"]
 
 def _get_window_df(motorcycle_id: str, minutes: int = 30) -> pd.DataFrame:
-    flux = f"""
-    from(bucket: "{INFLUXDB_BUCKET}")
-      |> range(start: -{minutes}m)
-      |> filter(fn: (r) => r._measurement == "obd_data")
-      |> filter(fn: (r) => r.motorcycle_id == "{motorcycle_id}")
-      |> filter(fn: (r) => { " or ".join([f'r._field == "{f}"' for f in FEATURES]) })
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-      |> keep(columns: [{', '.join([f'"{f}"' for f in ["_time"] + FEATURES]) }])
+    sql = f"""
+    SELECT *
+    FROM "obd_data"
+    WHERE
+        time >= now() - interval '{minutes} minutes'
+        AND "motorcycle_id" = '{motorcycle_id}'
+        AND (
+            "rpm" IS NOT NULL OR
+            "engine_load" IS NOT NULL OR
+            "throttle_pos" IS NOT NULL OR
+            "long_fuel_trim_1" IS NOT NULL OR
+            "coolant_temp" IS NOT NULL OR
+            "elm_voltage" IS NOT NULL
+        )
+    ORDER BY time DESC
+    LIMIT 500
     """
 
-    client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
-    df = client.query_api().query_data_frame(flux)
-    client.close()
+    try:
+        client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
+        df = client.query_api().query_data_frame_sql(query=sql, database=INFLUXDB_BUCKET)
+        client.close()
+    except Exception as e:
+        print(f"[ERROR] SQL query failed in _get_window_df: {e}")
+        return pd.DataFrame()
+
     if df.empty:
         return pd.DataFrame()
-    df = df.drop(columns=["result", "table"], errors="ignore")
 
-    # Show how many nulls per feature for debugging
-    print("[DEBUG] Null count per column:")
-    print(df[FEATURES].isnull().sum())
-
-    # Keep rows with at least 4 non-null sensor readings
-    df = df[df[FEATURES].notna().sum(axis=1) >= 4]
-
-    df = df.sort_values("_time").reset_index(drop=True)
+    df = df.dropna(subset=FEATURES, how='all')
+    df = df.drop_duplicates()
+    df = df.sort_values(by="time").reset_index(drop=True)
     return df
+
 
 def detect_anomalies(motorcycle_id: str, brand: str, model: str, mode="idle", minutes=30):
     try:
