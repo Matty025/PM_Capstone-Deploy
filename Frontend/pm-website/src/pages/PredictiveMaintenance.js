@@ -25,6 +25,7 @@
   import RowAnomalyLineChart from "./RowAnomalyLineChart";
 import { mqttClient as client } from "../config"; // ✅ use the exported client
 import { BASE_URL } from "../config"; // or wherever your config.js is located
+import { mqttClient } from "../config";
 
 
   import "./PredictiveMaintenance.css";
@@ -38,7 +39,7 @@ import { BASE_URL } from "../config"; // or wherever your config.js is located
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [uploadedFile, setUploadedFile] = useState(null);
     const [useUploadedFile, setUseUploadedFile] = useState(false);
-    const [recentData, setRecentData] = useState(null);
+    const [setRecentData] = useState(null);
 
 const requestRecentData = () => {
   const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
@@ -78,7 +79,7 @@ useEffect(() => {
     mqttClient.removeListener("message", handleRecentData);
     mqttClient.unsubscribe("obd/status");
   };
-}, []);
+}, [setRecentData]);
 
 
 useEffect(() => {
