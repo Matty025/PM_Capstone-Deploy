@@ -3,10 +3,14 @@ import os
 import time
 import json
 import sys
+import ssl
 import paho.mqtt.client as mqtt
+from dotenv import load_dotenv
 from influxdb_client import InfluxDBClient, Point, WriteOptions
 from urllib.parse import urlparse
-import ssl
+
+# ───── Load Environment Variables ─────
+load_dotenv()
 
 # ───── MQTT Setup ─────
 mqtt_url = os.getenv("MQTT_BROKER_URL", "mqtts://ha62a160.ala.asia-southeast1.emqxsl.com:8883")
@@ -17,11 +21,17 @@ MQTT_PORT = parsed.port or 8883
 MQTT_TRANSPORT = "tcp"
 
 mqtt_client = mqtt.Client(transport=MQTT_TRANSPORT, protocol=mqtt.MQTTv311)
+
+MQTT_USERNAME = os.getenv("MQTT_USERNAME")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
+if MQTT_USERNAME and MQTT_PASSWORD:
+    mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+
 mqtt_client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
 mqtt_client.tls_insecure_set(False)
 
 def on_connect(client, userdata, flags, rc):
-    print(f"Connected to MQTT broker with result code {rc}")
+    print(f"[MQTT] Connected to broker with result code {rc}")
 
 mqtt_client.on_connect = on_connect
 mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 30)
@@ -38,18 +48,8 @@ influx_client = InfluxDBClient(
     token=INFLUXDB_TOKEN,
     org=INFLUXDB_ORG
 )
-write_api = influx_client.write_api(write_options=WriteOptions(batch_size=1))
 
-def write_to_influxdb(obd_data, motorcycle_id):
-    point = Point("obd_data").tag("motorcycle_id", motorcycle_id)
-    for cmd, value in obd_data.items():
-        if value is not None:
-            try:
-                point = point.field(cmd.lower(), float(value))
-            except (ValueError, TypeError):
-                print(f"[WARNING] Could not convert value to float for {cmd}: {value}")
-    write_api.write(bucket=INFLUXDB_BUCKET, record=point)
-    print(f"[InfluxDB] Wrote: {obd_data}")
+write_api = influx_client.write_api(write_options=WriteOptions(batch_size=1))
 
 # ───── Motorcycle ID ─────
 if len(sys.argv) < 2:
@@ -60,18 +60,31 @@ else:
 
 MQTT_TOPIC = f"obd/motorcycle/{MOTORCYCLE_ID}/data"
 
+def write_to_influxdb(obd_data, motorcycle_id):
+    point = Point("obd_data").tag("motorcycle_id", motorcycle_id)
+    for cmd, value in obd_data.items():
+        if value is not None:
+            try:
+                val_float = float(value)
+                point = point.field(cmd.lower(), val_float)
+            except (ValueError, TypeError):
+                print(f"[WARNING] Could not convert value to float for {cmd}: {value}")
+    write_api.write(bucket=INFLUXDB_BUCKET, record=point)
+    print(f"[InfluxDB] Wrote: {obd_data}")
+
 # ───── Connect to OBD ─────
-port = "COM4"  # Change this if needed
-print(f"Attempting to connect to OBD-II device on {port}...")
+port = "COM4"  # Update if needed
+print(f"[OBD] Attempting to connect on {port}...")
 
 try:
     connection = obd.OBD(portstr=port, fast=True, timeout=3)
 
     if connection.is_connected():
-        print(f"✅ Successfully connected to vehicle on {port}.")
+        print(f"[OBD] Successfully connected on {port}")
 
+        # Check PID support if needed
         if not connection.supports(obd.commands.LONG_FUEL_TRIM_1):
-            print("[WARNING] LONG_FUEL_TRIM_1 PID not supported by this vehicle or adapter.")
+            print("[WARNING] LONG_FUEL_TRIM_1 not supported.")
 
         commands = [
             obd.commands.RPM,
@@ -83,30 +96,28 @@ try:
         ]
 
         last_write_time = time.time()
-        print("📡 Starting data collection. Press Ctrl+C to stop.")
+        print("🔄 Gathering OBD data... Press Ctrl+C to stop.")
 
         try:
             while True:
-                # os.system('cls' if os.name == 'nt' else 'clear')  # Removed to preserve logs
-
+                os.system('cls' if os.name == 'nt' else 'clear')
                 obd_data = {}
+
                 for cmd in commands:
                     response = connection.query(cmd)
-
                     if response.is_null():
-                        print(f"[DEBUG] {cmd.name} returned no data.")
+                        print(f"[DEBUG] {cmd.name} returned null.")
                         value = None
                     else:
-                        value = response.value.magnitude if response.value is not None else None
-                        value = round(float(value), 2) if value is not None else None
-
+                        try:
+                            value = response.value.magnitude if response.value else None
+                            if value is not None:
+                                value = round(float(value), 2)
+                        except Exception as ex:
+                            print(f"[ERROR] Failed to parse {cmd.name}: {ex}")
+                            value = None
                     obd_data[cmd.name] = value
 
-                # 🔍 Detect if motorcycle is off
-                if all(v is None for v in obd_data.values()):
-                    print("⚠️ Motorcycle is turned off. Please turn it on.", file=sys.stderr)
-
-                # Remove null values from payload
                 payload_data = {k: v for k, v in obd_data.items() if v is not None}
                 payload = {
                     "motorcycle_id": MOTORCYCLE_ID,
@@ -114,24 +125,22 @@ try:
                 }
 
                 mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
-                print(f"📤 Published OBD data:\n{json.dumps(payload, indent=2)}")
+                print(f"[MQTT] Published:\n{json.dumps(payload, indent=2)}")
 
-                # Write to InfluxDB every 5 seconds
-                current_time = time.time()
-                if current_time - last_write_time >= 5:
+                if time.time() - last_write_time >= 5:
                     write_to_influxdb(obd_data, MOTORCYCLE_ID)
-                    last_write_time = current_time
+                    last_write_time = time.time()
 
-                time.sleep(0.2)  # 200 ms delay
+                time.sleep(0.2)
 
         except KeyboardInterrupt:
-            print("\n⛔ Data gathering stopped by user.")
+            print("\n[OBD] Data gathering stopped by user.")
 
     else:
-        print("❌ Bluetooth not connected to OBD adapter. Please check the connection.", file=sys.stderr)
+        print(f"[ERROR] Failed to connect to OBD-II on {port}")
 
 except Exception as e:
-    print(f"❌ Error while connecting to {port}: {e}", file=sys.stderr)
+    print(f"[FATAL ERROR] {e}")
 
 finally:
     mqtt_client.loop_stop()

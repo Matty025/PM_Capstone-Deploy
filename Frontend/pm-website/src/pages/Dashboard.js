@@ -76,61 +76,63 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!client) return;
+const handleConnect = () => {
+  console.log("✅ Connected to MQTT broker");
+  if (motorcycle?.id) {
+    client.subscribe(`obd/motorcycle/${motorcycle.id}/data`);
+  }
+  client.subscribe("obd/status");
+};
 
-    const handleConnect = () => {
-      console.log("✅ Connected to MQTT broker");
-      client.subscribe("obd/data");
-      client.subscribe("obd/status");
-    };
+const handleMessage = (topic, message) => {
+  const rawMessage = message.toString();
 
-    const handleMessage = (topic, message) => {
-      const rawMessage = message.toString();
+  if (topic === "obd/status") {
+    try {
+      const statusPayload = JSON.parse(rawMessage);
+      const status = statusPayload.status || "";
+      const msg = statusPayload.message || "";
 
-      if (topic === "obd/status") {
-        try {
-          const statusPayload = JSON.parse(rawMessage);
-          const status = statusPayload.status || "";
-          const msg = statusPayload.message || "";
+      if (status === "started") toast.success("✅ OBD started successfully.");
+      else if (status === "stopped") toast.success("🛑 OBD stopped successfully.");
+      else if (status === "error") toast.error("❌ " + msg);
+      else toast.info("ℹ️ " + msg);
+    } catch (err) {
+      console.error("Failed to parse obd/status message:", err);
+    }
+    return;
+  }
 
-          if (status === "started") toast.success("✅ OBD started successfully.");
-          else if (status === "stopped") toast.success("🛑 OBD stopped successfully.");
-          else if (status === "error") toast.error("❌ " + msg);
-          else toast.info("ℹ️ " + msg);
-        } catch (err) {
-          console.error("Failed to parse obd/status message:", err);
-        }
-        return;
-      }
+  if (topic === `obd/motorcycle/${motorcycle?.id}/data`) {
+    try {
+      const payload = JSON.parse(rawMessage);
+      const data = payload.data || {};
 
-      if (topic === "obd/data") {
-        try {
-          const payload = JSON.parse(rawMessage);
-          if (payload.motorcycle_id === String(motorcycle?.id)) {
-            const data = payload.data || {};
-            const normalized = {
-              RPM: data.RPM || 0,
-              COOLANT_TEMP: data.COOLANT_TEMP || 0,
-              ELM_VOLTAGE: data.ELM_VOLTAGE || 0,
-              ENGINE_LOAD: data.ENGINE_LOAD || 0,
-              THROTTLE_POS: data.THROTTLE_POS ?? 0,
-              LONG_TERM_FUEL_TRIM: data.LONG_FUEL_TRIM_1 ?? 0,
-            };
-            setObdData(normalized);
-            updateChartData(normalized);
-          }
-        } catch (err) {
-          console.error("Failed to parse obd/data message:", err);
-        }
-      }
-    };
+      const normalized = {
+        RPM: data.RPM || 0,
+        COOLANT_TEMP: data.COOLANT_TEMP || 0,
+        ELM_VOLTAGE: data.ELM_VOLTAGE || 0,
+        ENGINE_LOAD: data.ENGINE_LOAD || 0,
+        THROTTLE_POS: data.THROTTLE_POS ?? 0,
+        LONG_TERM_FUEL_TRIM: data.LONG_FUEL_TRIM_1 ?? 0,
+      };
 
-    client.on("connect", handleConnect);
-    client.on("message", handleMessage);
+      setObdData(normalized);
+      updateChartData(normalized);
+    } catch (err) {
+      console.error("Failed to parse obd/motorcycle data message:", err);
+    }
+  }
+};
 
-    return () => {
-      client.off("connect", handleConnect);
-      client.off("message", handleMessage);
-    };
+client.on("connect", handleConnect);
+client.on("message", handleMessage);
+
+return () => {
+  client.off("connect", handleConnect);
+  client.off("message", handleMessage);
+};
+
   }, [motorcycle, updateChartData]);
 
   const handleStartOBD = () => {
