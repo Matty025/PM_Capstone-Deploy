@@ -26,7 +26,17 @@ const influxDB = new InfluxDB({ url: influxUrl, token: influxToken });
 const writeApi = influxDB.getWriteApi(influxOrg, influxBucket, "ms");
 
 // ─────────── Middleware ───────────
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://pm-machinelearning.onrender.com",
+];
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // ─────────── PostgreSQL Setup ───────────
