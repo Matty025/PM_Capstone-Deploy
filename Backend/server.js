@@ -21,7 +21,6 @@ if (!influxUrl || !influxToken || !influxOrg || !influxBucket) {
   process.exit(1);
 }
 
-const { InfluxDB, Point } = require("@influxdata/influxdb-client");
 
 const influxDB = new InfluxDB({ url: influxUrl, token: influxToken });
 const writeApi = influxDB.getWriteApi(influxOrg, influxBucket, "ms");
