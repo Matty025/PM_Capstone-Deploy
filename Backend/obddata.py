@@ -8,6 +8,7 @@ import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
 from influxdb_client import InfluxDBClient, Point, WriteOptions
 from urllib.parse import urlparse
+from pint.errors import OffsetUnitCalculusError
 
 # ───── Load Environment Variables ─────
 load_dotenv()
@@ -48,7 +49,6 @@ influx_client = InfluxDBClient(
     token=INFLUXDB_TOKEN,
     org=INFLUXDB_ORG
 )
-
 write_api = influx_client.write_api(write_options=WriteOptions(batch_size=1))
 
 # ───── Motorcycle ID ─────
@@ -73,7 +73,7 @@ def write_to_influxdb(obd_data, motorcycle_id):
     print(f"[InfluxDB] Wrote: {obd_data}")
 
 # ───── Connect to OBD ─────
-port = "COM4"  # Update if needed
+port = "COM3"
 print(f"[OBD] Attempting to connect on {port}...")
 
 try:
@@ -82,7 +82,6 @@ try:
     if connection.is_connected():
         print(f"[OBD] Successfully connected on {port}")
 
-        # Check PID support if needed
         if not connection.supports(obd.commands.LONG_FUEL_TRIM_1):
             print("[WARNING] LONG_FUEL_TRIM_1 not supported.")
 
@@ -96,7 +95,7 @@ try:
         ]
 
         last_write_time = time.time()
-        print("🔄 Gathering OBD data... Press Ctrl+C to stop.")
+        print("[INFO] Gathering OBD data... Press Ctrl+C to stop.")
 
         try:
             while True:
@@ -110,12 +109,21 @@ try:
                         value = None
                     else:
                         try:
-                            value = response.value.magnitude if response.value else None
-                            if value is not None:
-                                value = round(float(value), 2)
+                            if response.value is not None:
+                                if cmd == obd.commands.COOLANT_TEMP:
+                                    value = float(response.value.to("degC").magnitude)
+                                else:
+                                    value = float(response.value.magnitude)
+                                value = round(value, 2)
+                            else:
+                                value = None
+                        except OffsetUnitCalculusError as ex:
+                            print(f"[ERROR] Offset unit error for {cmd.name}: {ex}")
+                            value = None
                         except Exception as ex:
                             print(f"[ERROR] Failed to parse {cmd.name}: {ex}")
                             value = None
+
                     obd_data[cmd.name] = value
 
                 payload_data = {k: v for k, v in obd_data.items() if v is not None}

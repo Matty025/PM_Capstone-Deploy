@@ -12,37 +12,40 @@ import base64
 import io
 import pandas as pd
 import numpy as np
+from dotenv import load_dotenv
 import signal
 
-from report_api import get_daily_report, get_weekly_report
+from report_api import get_daily_report, get_weekly_report, report_api
 from anomaly_model import detect_anomalies, FEATURES
 from influx_query import get_recent_data
-from report_api import report_api
-from dotenv import load_dotenv
-load_dotenv()
 
+# ───── Load Environment Variables ─────
+load_dotenv()
 print(f"📄 .env loaded: MQTT_HOST={os.getenv('MQTT_BROKER_HOST')}, PORT={os.getenv('MQTT_BROKER_PORT')}")
 
+# ───── Flask App Setup ─────
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(report_api)
 
-# MQTT EMQX Setup
+# ───── MQTT Setup ─────
 EMQX_HOST = os.getenv("MQTT_BROKER_HOST")
 EMQX_PORT = int(os.getenv("MQTT_BROKER_PORT", 1883))
 MQTT_COMMAND_TOPIC = "obd/command"
 MQTT_STATUS_TOPIC = "obd/status"
 
 mqtt_client = mqtt.Client()
-mqtt_client.username_pw_set(
-    os.getenv("MQTT_USERNAME"),
-    os.getenv("MQTT_PASSWORD")
-)
+mqtt_client.username_pw_set(os.getenv("MQTT_USERNAME"), os.getenv("MQTT_PASSWORD"))
 
 obd_process = None
 
 def publish_status(status):
     mqtt_client.publish(MQTT_STATUS_TOPIC, json.dumps(status))
+
+# ───── MQTT Event Handlers ─────
+def on_mqtt_connect(client, userdata, flags, rc):
+    print("✅ Connected to MQTT broker")
+    client.subscribe(MQTT_COMMAND_TOPIC)
 
 def on_mqtt_message(client, userdata, msg):
     try:
@@ -52,9 +55,6 @@ def on_mqtt_message(client, userdata, msg):
 
         if command == "start-obd":
             motorcycle_id = payload.get("motorcycle_id")
-            if obd_process and obd_process.poll() is None:
-                print("⚠️ OBD already running. Ignoring second start command.")
-                return
             threading.Thread(target=lambda: start_obd_internal(motorcycle_id), daemon=True).start()
 
         elif command == "stop-obd":
@@ -63,23 +63,21 @@ def on_mqtt_message(client, userdata, msg):
         elif command == "report-daily":
             motorcycle_id = payload.get("motorcycle_id")
             if not motorcycle_id:
-                publish_status({"status": "error", "message": "Missing motorcycle_id for daily report"})
-                return
+                return publish_status({"status": "error", "message": "Missing motorcycle_id"})
             report = get_daily_report(motorcycle_id)
             publish_status({"type": "report-daily", "rows": report})
 
         elif command == "report-weekly":
             motorcycle_id = payload.get("motorcycle_id")
             if not motorcycle_id:
-                publish_status({"status": "error", "message": "Missing motorcycle_id for weekly report"})
-                return
+                return publish_status({"status": "error", "message": "Missing motorcycle_id"})
             report = get_weekly_report(motorcycle_id)
             publish_status({"type": "report-weekly", "rows": report})
 
         elif command == "train-model":
             motorcycle_id = payload.get("motorcycle_id")
             brand = payload.get("brand")
-            train_model_internal(motorcycle_id, brand)
+            threading.Thread(target=lambda: train_model_internal(motorcycle_id, brand), daemon=True).start()
 
         elif command == "predict":
             motorcycle_id = payload.get("motorcycle_id")
@@ -100,44 +98,29 @@ def on_mqtt_message(client, userdata, msg):
             model = payload.get("model")
             csv_base64 = payload.get("file_base64")
 
+            if not all([motorcycle_id, brand, model, csv_base64]):
+                raise ValueError("Missing motorcycle_id, brand, model, or file")
+
+            decoded_csv = base64.b64decode(csv_base64).decode('utf-8')
+            df = pd.read_csv(io.StringIO(decoded_csv)).replace(0, np.nan).dropna()
+            for col in FEATURES:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            df["_time"] = pd.Timestamp.now()
+
+            import anomaly_model
+            original_get_window_df = anomaly_model._get_window_df
+            anomaly_model._get_window_df = lambda *_, **__: df
+
             try:
-                if not all([motorcycle_id, brand, model, csv_base64]):
-                    raise ValueError("Missing motorcycle_id, brand, model, or file_base64")
+                result = detect_anomalies(motorcycle_id, brand, model, mode="idle", minutes=30)
+            finally:
+                anomaly_model._get_window_df = original_get_window_df
 
-                decoded_csv = base64.b64decode(csv_base64).decode('utf-8')
-                df = pd.read_csv(io.StringIO(decoded_csv))
-                df = df.replace(0, np.nan).dropna()
-
-                for col in FEATURES:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
-                df["_time"] = pd.Timestamp.now()
-
-                import anomaly_model
-                original_get_window_df = anomaly_model._get_window_df
-                anomaly_model._get_window_df = lambda *_, **__: df
-
-                try:
-                    result = detect_anomalies(
-                        motorcycle_id=motorcycle_id,
-                        brand=brand,
-                        model=model,
-                        mode="idle",
-                        minutes=30
-                    )
-                finally:
-                    anomaly_model._get_window_df = original_get_window_df
-
-                publish_status({"type": "predict-from-csv", "result": result})
-            except Exception as e:
-                publish_status({"status": "error", "message": f"CSV Predict Error: {e}"})
+            publish_status({"type": "predict-from-csv", "result": result})
 
     except Exception as e:
-        print(f"❌ MQTT command failed: {e}")
+        print(f"❌ MQTT command error: {e}")
         publish_status({"status": "error", "message": str(e)})
-
-def on_mqtt_connect(client, userdata, flags, rc):
-    print("✅ Connected to MQTT broker")
-    client.subscribe(MQTT_COMMAND_TOPIC)
 
 def start_mqtt():
     print(f"📱 Connecting to EMQX at {EMQX_HOST}:{EMQX_PORT} with TLS...")
@@ -147,9 +130,9 @@ def start_mqtt():
     mqtt_client.connect(EMQX_HOST, EMQX_PORT)
     mqtt_client.loop_start()
 
-mqtt_thread = threading.Thread(target=start_mqtt, daemon=True)
-mqtt_thread.start()
+threading.Thread(target=start_mqtt, daemon=True).start()
 
+# ───── OBD Subprocess Control ─────
 def start_obd_internal(motorcycle_id=None):
     global obd_process
 
@@ -163,31 +146,30 @@ def start_obd_internal(motorcycle_id=None):
             args.append(str(motorcycle_id))
         print(f"Starting subprocess: {' '.join(args)}")
 
-        obd_process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        obd_process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
         publish_status({"status": "started", "pid": obd_process.pid})
 
-        def monitor_output(process):
-            for line in process.stdout:
-                print("[OBD STDOUT] " + line.strip())
-                if "pid not supported" in line.lower():
-                    publish_status({"status": "error", "message": "PID not supported on this vehicle"})
+        def read_stream(stream, label, is_error=False):
+            for line in iter(stream.readline, ''):
+                line = line.strip()
+                print(f"[OBD {label}] {line}")
+                if is_error:
+                    publish_status({"status": "error", "message": f"OBD error: {line}"})
+                elif "pid not supported" in line.lower():
+                    publish_status({"status": "error", "message": "PID not supported"})
                 elif "bluetooth" in line.lower() and "not connected" in line.lower():
                     publish_status({"status": "error", "message": "Bluetooth not connected"})
                 elif "turn on ignition" in line.lower():
-                    publish_status({"status": "error", "message": "Motorcycle is turned off. Please turn it on."})
+                    publish_status({"status": "error", "message": "Turn on motorcycle ignition"})
 
-            for line in process.stderr:
-                print("[OBD STDERR] " + line.strip())
-                publish_status({"status": "error", "message": f"OBD error: {line.strip()}"})
-
-        threading.Thread(target=monitor_output, args=(obd_process,), daemon=True).start()
+        threading.Thread(target=read_stream, args=(obd_process.stdout, "STDOUT"), daemon=True).start()
+        threading.Thread(target=read_stream, args=(obd_process.stderr, "STDERR", True), daemon=True).start()
 
     except Exception as e:
         publish_status({"status": "error", "message": str(e)})
-        
+
 def stop_obd_internal():
     global obd_process
-
     if obd_process and obd_process.poll() is None:
         print("Stopping running OBD subprocess...")
         obd_process.terminate()
@@ -198,27 +180,23 @@ def stop_obd_internal():
         obd_process = None
         publish_status({"status": "stopped", "message": "OBD stopped"})
     else:
-        # Check and kill any stray obddata.py processes
+        killed = False
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
             try:
-                cmdline = proc.info.get("cmdline") or []
-                if "obddata.py" in " ".join(cmdline):
+                if any("obddata.py" in part for part in proc.info.get("cmdline", [])):
                     proc.kill()
                     print(f"Killed stray obddata.py process (PID {proc.pid})")
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    killed = True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
-        publish_status({"status": "idle", "message": "No OBD running"})
+        publish_status({"status": "stopped" if killed else "idle", "message": "Stopped OBD process"})
 
+# ───── ML Training / Prediction ─────
 def train_model_internal(motorcycle_id, brand):
     try:
         brand_folder = brand.strip().replace(" ", "_").lower()
-        cmd = [
-            sys.executable, "train_idle_model.py",
-            "--motorcycle_id", str(motorcycle_id),
-            "--brand", brand_folder,
-            "--minutes", "43200"
-        ]
-        print(f"Training model with: {' '.join(cmd)}")
+        cmd = [sys.executable, "train_idle_model.py", "--motorcycle_id", str(motorcycle_id), "--brand", brand_folder, "--minutes", "43200"]
+        print(f"Training model: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode == 0:
             publish_status({"status": "success", "message": "Model trained"})
@@ -229,17 +207,12 @@ def train_model_internal(motorcycle_id, brand):
 
 def predict_internal(motorcycle_id, brand, model):
     try:
-        print(f"Predicting anomalies for motorcycle {motorcycle_id}, brand={brand}, model={model}")
-        return detect_anomalies(
-            motorcycle_id=str(motorcycle_id),
-            brand=brand,
-            model=model,
-            mode="idle",
-            minutes=30
-        )
+        print(f"Predicting for motorcycle {motorcycle_id}, brand={brand}, model={model}")
+        return detect_anomalies(motorcycle_id, brand, model, mode="idle", minutes=30)
     except Exception as e:
         return {"status": "error", "message": f"Prediction failed: {str(e)}"}
 
+# ───── Flask API Routes ─────
 @app.route("/start-obd", methods=["POST"])
 def start_obd_route():
     motorcycle_id = request.json.get("motorcycle_id")
@@ -254,10 +227,7 @@ def stop_obd_route():
 @app.route("/train_model", methods=["POST"])
 def train_model_route():
     data = request.get_json()
-    threading.Thread(
-        target=lambda: train_model_internal(data["motorcycle_id"], data["brand"]),
-        daemon=True
-    ).start()
+    threading.Thread(target=lambda: train_model_internal(data["motorcycle_id"], data["brand"]), daemon=True).start()
     return jsonify({"message": "Training started"}), 200
 
 @app.route("/predict", methods=["POST"])
