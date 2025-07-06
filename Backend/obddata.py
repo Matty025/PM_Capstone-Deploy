@@ -8,6 +8,7 @@ from influxdb_client import InfluxDBClient, Point, WriteOptions
 from urllib.parse import urlparse
 import ssl
 
+# ───── MQTT Setup ─────
 mqtt_url = os.getenv("MQTT_BROKER_URL", "mqtts://ha62a160.ala.asia-southeast1.emqxsl.com:8883")
 parsed = urlparse(mqtt_url)
 
@@ -19,30 +20,19 @@ mqtt_client = mqtt.Client(transport=MQTT_TRANSPORT, protocol=mqtt.MQTTv311)
 mqtt_client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
 mqtt_client.tls_insecure_set(False)
 
-# InfluxDB settings - update these with your real values
+def on_connect(client, userdata, flags, rc):
+    print(f"Connected to MQTT broker with result code {rc}")
+
+mqtt_client.on_connect = on_connect
+mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 30)
+mqtt_client.loop_start()
+
+# ───── InfluxDB Setup ─────
 INFLUXDB_URL = os.getenv("INFLUX_URL")
 INFLUXDB_TOKEN = os.getenv("INFLUX_TOKEN")
 INFLUXDB_ORG = os.getenv("INFLUX_ORG")
 INFLUXDB_BUCKET = os.getenv("INFLUX_BUCKET")
 
-# Get motorcycle_id from command line argument (optional)
-if len(sys.argv) < 2:
-    print("[WARNING] No motorcycle_id provided. Using 'unknown'.")
-    MOTORCYCLE_ID = "unknown"
-else:
-    MOTORCYCLE_ID = sys.argv[1]
-
-MQTT_TOPIC = f"obd/motorcycle/{MOTORCYCLE_ID}/data"
-
-def on_connect(client, userdata, flags, rc):
-    print(f"Connected to MQTT broker with result code {rc}")
-mqtt_client = mqtt.Client(protocol=mqtt.MQTTv311, transport="tcp")
-mqtt_client.tls_set()  # Enable TLS (no certificate needed if using EMQX default)
-mqtt_client.on_connect = on_connect
-mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 30)
-mqtt_client.loop_start()
-
-# Setup InfluxDB client
 influx_client = InfluxDBClient(
     url=INFLUXDB_URL,
     token=INFLUXDB_TOKEN,
@@ -55,24 +45,31 @@ def write_to_influxdb(obd_data, motorcycle_id):
     for cmd, value in obd_data.items():
         if value is not None:
             try:
-                val_float = float(value)
-                point = point.field(cmd.lower(), val_float)  # e.g., rpm=1200
+                point = point.field(cmd.lower(), float(value))
             except (ValueError, TypeError):
                 print(f"[WARNING] Could not convert value to float for {cmd}: {value}")
-                continue
     write_api.write(bucket=INFLUXDB_BUCKET, record=point)
     print(f"[InfluxDB] Wrote: {obd_data}")
 
-port = "COM4"  # Change this as needed
+# ───── Motorcycle ID ─────
+if len(sys.argv) < 2:
+    print("[WARNING] No motorcycle_id provided. Using 'unknown'.")
+    MOTORCYCLE_ID = "unknown"
+else:
+    MOTORCYCLE_ID = sys.argv[1]
+
+MQTT_TOPIC = f"obd/motorcycle/{MOTORCYCLE_ID}/data"
+
+# ───── Connect to OBD ─────
+port = "COM4"  # Change this if needed
 print(f"Attempting to connect to OBD-II device on {port}...")
 
 try:
     connection = obd.OBD(portstr=port, fast=True, timeout=3)
 
     if connection.is_connected():
-        print(f"Successfully connected to vehicle on {port}!")
+        print(f"✅ Successfully connected to vehicle on {port}.")
 
-        # Check LONG_FUEL_TRIM_1 support
         if not connection.supports(obd.commands.LONG_FUEL_TRIM_1):
             print("[WARNING] LONG_FUEL_TRIM_1 PID not supported by this vehicle or adapter.")
 
@@ -86,27 +83,30 @@ try:
         ]
 
         last_write_time = time.time()
+        print("📡 Starting data collection. Press Ctrl+C to stop.")
 
-        print("Press Ctrl+C to stop data gathering.")
         try:
             while True:
-                # Clear screen each loop for cleaner output
-                os.system('cls' if os.name == 'nt' else 'clear')
+                # os.system('cls' if os.name == 'nt' else 'clear')  # Removed to preserve logs
 
                 obd_data = {}
                 for cmd in commands:
                     response = connection.query(cmd)
 
                     if response.is_null():
-                        print(f"[DEBUG] {cmd.name} returned no data (null).")
+                        print(f"[DEBUG] {cmd.name} returned no data.")
                         value = None
                     else:
                         value = response.value.magnitude if response.value is not None else None
-                        if value is not None:
-                            value = round(float(value), 2)
+                        value = round(float(value), 2) if value is not None else None
+
                     obd_data[cmd.name] = value
 
-                # Remove null values from payload to avoid sending them over MQTT
+                # 🔍 Detect if motorcycle is off
+                if all(v is None for v in obd_data.values()):
+                    print("⚠️ Motorcycle is turned off. Please turn it on.", file=sys.stderr)
+
+                # Remove null values from payload
                 payload_data = {k: v for k, v in obd_data.items() if v is not None}
                 payload = {
                     "motorcycle_id": MOTORCYCLE_ID,
@@ -114,7 +114,7 @@ try:
                 }
 
                 mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
-                print(f"Published OBD data: {json.dumps(payload, indent=2)}")
+                print(f"📤 Published OBD data:\n{json.dumps(payload, indent=2)}")
 
                 # Write to InfluxDB every 5 seconds
                 current_time = time.time()
@@ -122,20 +122,16 @@ try:
                     write_to_influxdb(obd_data, MOTORCYCLE_ID)
                     last_write_time = current_time
 
-                time.sleep(0.2)  # 200 ms delay for faster updates
+                time.sleep(0.2)  # 200 ms delay
 
         except KeyboardInterrupt:
-            print("\nData gathering stopped by user.")
+            print("\n⛔ Data gathering stopped by user.")
+
     else:
-         print("[ERROR] Failed to connect to OBD-II adapter. Check ignition or Bluetooth.")
+        print("❌ Bluetooth not connected to OBD adapter. Please check the connection.", file=sys.stderr)
 
 except Exception as e:
-    if "could not open port" in str(e).lower():
-        print("[ERROR] Bluetooth adapter not connected or COM port not found.")
-    elif "permission denied" in str(e).lower():
-        print("[ERROR] Permission denied to access port.")
-    else:
-        print(f"[ERROR] Unknown connection error: {e}")
+    print(f"❌ Error while connecting to {port}: {e}", file=sys.stderr)
 
 finally:
     mqtt_client.loop_stop()

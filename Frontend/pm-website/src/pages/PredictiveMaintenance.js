@@ -1,248 +1,244 @@
-  import React, { useState, useEffect, useRef } from "react";
-  import { useNavigate } from "react-router-dom";
-  import axios from "axios";
-  import {
-    PieChart,
-    Pie,
-    Cell,
-    Legend,
-    ResponsiveContainer,
-  } from "recharts";
-  import jsPDF from "jspdf";
-  import html2canvas from "html2canvas";
-  import {
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    BarChart,   
-    Bar,  
-  } from "recharts";
-  import { toast, ToastContainer } from "react-toastify";
-  import "react-toastify/dist/ReactToastify.css";
-  import RowAnomalyLineChart from "./RowAnomalyLineChart";
-import { mqttClient as client } from "../config"; // ✅ use the exported client
-import { BASE_URL } from "../config"; // or wherever your config.js is located
-import { mqttClient } from "../config";
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  BarChart,
+  Bar,
+} from "recharts";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import RowAnomalyLineChart from "./RowAnomalyLineChart";
+import { mqttClient as client, BASE_URL } from "../config"; // ✅ fixed import
+import "./PredictiveMaintenance.css";
 
+function PredictiveMaintenance() {
+  const navigate = useNavigate();
+  const [minutes, setMinutes] = useState(30);
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [analysis, setAnalysis] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [useUploadedFile, setUseUploadedFile] = useState(false);
+  const [setRecentData] = useState([]);
 
-  import "./PredictiveMaintenance.css";
+  const requestRecentData = () => {
+    const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
+    if (!motorcycle?.id) {
+      toast.error("No motorcycle selected.");
+      return;
+    }
 
-  function PredictiveMaintenance() {
-    const navigate = useNavigate();
-    const [minutes, setMinutes] = useState(30);
-    const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState([]);
-    const [analysis, setAnalysis] = useState(null);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [uploadedFile, setUploadedFile] = useState(null);
-    const [useUploadedFile, setUseUploadedFile] = useState(false);
-    const [setRecentData] = useState(null);
+    client.publish(
+      "obd/command",
+      JSON.stringify({
+        command: "recent-data",
+        motorcycle_id: motorcycle.id,
+        minutes: 30,
+      })
+    );
+  };
 
-const requestRecentData = () => {
-  const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
-  if (!motorcycle?.id) {
-    toast.error("No motorcycle selected.");
-    return;
-  }
-
-  mqttClient.publish("obd/command", JSON.stringify({
-    command: "recent-data",
-    motorcycle_id: motorcycle.id,
-    minutes: 30,
-  }));
-};
-
-
-useEffect(() => {
-  const handleRecentData = (topic, message) => {
-    try {
-      const data = JSON.parse(message.toString());
-      if (data.type === "recent-data") {
-        console.log("✅ Received recent data:", data.rows);
-        setRecentData(data.rows);
+  useEffect(() => {
+    const handleRecentData = (topic, message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        if (data.type === "recent-data") {
+          console.log("✅ Received recent data:", data.rows);
+          setRecentData(data.rows);
+          setRows(data.rows);
+        }
+      } catch (e) {
+        console.error("❌ Error parsing recent data:", e);
       }
-    } catch (e) {
-      console.error("❌ Error parsing recent data:", e);
+    };
+
+    client.on("message", handleRecentData);
+    client.subscribe("obd/status");
+
+    requestRecentData();
+
+    return () => {
+      client.removeListener("message", handleRecentData);
+      client.unsubscribe("obd/status");
+    };
+  }, [setRecentData]);
+
+  useEffect(() => {
+    const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
+    if (!selected) {
+      toast.error("❌ No motorcycle selected.");
+      navigate("/signup-motorcycle");
+      return;
+    }
+
+    requestRecentData();
+  }, [minutes, navigate]);
+
+  const fetchRows = async (motorcycle_id, mins, { silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    try {
+      const { data } = await axios.post(`${BASE_URL}/recent-data`, {
+        motorcycle_id,
+        minutes: mins,
+      });
+      if (data.status === "ok") {
+        setRows(data.rows);
+        setAnalysis(null);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("❌ Failed to load data.");
+    } finally {
+      if (!silent) setLoading(false);
     }
   };
 
-  mqttClient.on("message", handleRecentData);
-  mqttClient.subscribe("obd/status");
-
-  // Request recent data once on mount
-  requestRecentData();
-
-  return () => {
-    mqttClient.removeListener("message", handleRecentData);
-    mqttClient.unsubscribe("obd/status");
-  };
-}, [setRecentData]);
-
-
-useEffect(() => {
-  const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
-  if (!selected) {
-    toast.error("❌ No motorcycle selected.");
-    navigate("/signup-motorcycle");
-    return;
-  }
-
-  fetchRows(selected.motorcycle_id || selected.id, minutes);
-}, [minutes, navigate]);
-//this is forthe recent data 
-const fetchRows = async (motorcycle_id, mins, { silent = false } = {}) => {
-  if (!silent) setLoading(true);
-  try {
-    const { data } = await axios.post(`${BASE_URL}/recent-data`, {
-      motorcycle_id,
-      minutes: mins,
-    });
-    if (data.status === "ok") {
-      setRows(data.rows);
-      setAnalysis(null);
-    }
-  } catch (err) {
-    console.error(err);
-    toast.error("❌ Failed to load data.");
-  } finally {
-    if (!silent) setLoading(false);
-  }
-};
-
-      
   useEffect(() => {
     if (!useUploadedFile) {
-      setAnalysis(null);        // ✅ clear old CSV-based analysis
-      setRows([]);              // optional: reset rows
-      setUploadedFile(null);    // ✅ clear uploaded file too
+      setAnalysis(null);
+      setRows([]);
+      setUploadedFile(null);
     }
   }, [useUploadedFile]);
 
-  // use effect and for run prediction 
-useEffect(() => {
-  if (!client) return;
+  useEffect(() => {
+    if (!client) return;
 
-  const handleMessage = (topic, message) => {
-    try {
-      if (topic === "obd/status") {
-        const payload = JSON.parse(message.toString());
+    const handleMessage = (topic, message) => {
+      try {
+        if (topic === "obd/status") {
+          const payload = JSON.parse(message.toString());
 
-        if (payload?.status === "error") {
-          toast.error(`❌ ${payload.message}`);
+          if (payload?.status === "error") {
+            toast.error(`❌ ${payload.message}`);
+            setLoading(false);
+            return;
+          }
+
+          if (payload.type === "predict-from-csv") {
+            setAnalysis(payload.result);
+            setRows([]);
+            toast.success("✅ Analysis complete using uploaded CSV");
+          }
+
+          if (payload.type === "predict") {
+            setAnalysis(payload);
+            setRows([]);
+            toast.success("✅ Analysis complete using live data");
+          }
+
           setLoading(false);
-          return;
         }
-
-        if (payload.type === "predict-from-csv") {
-          setAnalysis(payload.result);
-          setRows([]);
-          toast.success("✅ Analysis complete using uploaded CSV");
-        }
-
-        if (payload.type === "predict") {
-          setAnalysis(payload);
-          setRows([]);
-          toast.success("✅ Analysis complete using live data");
-        }
-
+      } catch (err) {
+        console.error("❌ MQTT message handling error:", err);
+        toast.error("❌ Invalid MQTT response");
         setLoading(false);
       }
-    } catch (err) {
-      console.error("❌ MQTT message handling error:", err);
-      toast.error("❌ Invalid MQTT response");
-      setLoading(false);
+    };
+
+    const handleConnect = () => {
+      console.log("✅ MQTT connected");
+      toast.success("📡 Connected to EMQX MQTT broker");
+      client.subscribe("obd/status");
+    };
+
+    const handleError = (err) => {
+      console.error("❌ MQTT error", err);
+      toast.error("MQTT connection error");
+    };
+
+    const handleClose = () => {
+      toast.warn("⚠️ MQTT disconnected");
+    };
+
+    client.on("connect", handleConnect);
+    client.on("error", handleError);
+    client.on("close", handleClose);
+    client.on("message", handleMessage);
+
+    return () => {
+      client.off("connect", handleConnect);
+      client.off("error", handleError);
+      client.off("close", handleClose);
+      client.off("message", handleMessage);
+    };
+  }, []);
+
+  const runPrediction = () => {
+    if (!client || !client.connected) {
+      toast.error("❌ MQTT not connected");
+      return;
     }
-  };
 
-  const handleConnect = () => {
-    console.log("✅ MQTT connected");
-    toast.success("📡 Connected to EMQX MQTT broker");
-    client.subscribe("obd/status");
-  };
+    const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
+    const id = selected?.motorcycle_id || selected?.id;
+    const brand = selected?.brand?.toLowerCase().replace(/\s+/g, "_");
+    const model = selected?.model?.toLowerCase().replace(/\s+/g, "_");
 
-  const handleError = (err) => {
-    console.error("❌ MQTT error", err);
-    toast.error("MQTT connection error");
-  };
+    if (!id || !brand || !model) {
+      toast.error("❌ Missing motorcycle info.");
+      return;
+    }
 
-  const handleClose = () => {
-    toast.warn("⚠️ MQTT disconnected");
-  };
+    setLoading(true);
+    setAnalysis(null);
+    setRows([]);
+    toast.info("🔍 Starting analysis...");
 
-  client.on("connect", handleConnect);
-  client.on("error", handleError);
-  client.on("close", handleClose);
-  client.on("message", handleMessage);
+    try {
+      if (uploadedFile && useUploadedFile) {
+        toast.info("📁 Using uploaded CSV file for analysis.");
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64String = reader.result.split(",")[1];
+          client.publish(
+            "obd/command",
+            JSON.stringify({
+              command: "predict-from-csv",
+              motorcycle_id: id,
+              brand,
+              model,
+              file_base64: base64String,
+            })
+          );
+          toast.info("📤 Sent file for analysis via MQTT.");
+        };
+        reader.readAsDataURL(uploadedFile);
+      } else {
+        setUploadedFile(null);
+        setUseUploadedFile(false);
 
-  return () => {
-    client.off("connect", handleConnect);
-    client.off("error", handleError);
-    client.off("close", handleClose);
-    client.off("message", handleMessage);
-  };
-}, []);
-
-    const runPrediction = () => {
-      if (!client || !client.connected) {
-        toast.error("❌ MQTT not connected");
-        return;
-      }
-
-      const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
-      const id = selected?.motorcycle_id || selected?.id;
-      const brand = selected?.brand?.toLowerCase().replace(/\s+/g, "_");
-      const model = selected?.model?.toLowerCase().replace(/\s+/g, "_");
-
-      if (!id || !brand || !model) {
-        toast.error("❌ Missing motorcycle info.");
-        return;
-      }
-
-      setLoading(true);
-      setAnalysis(null);
-      setRows([]);
-
-      toast.info("🔍 Starting analysis...");
-
-      try {
-        if (uploadedFile && useUploadedFile) {
-          toast.info("📁 Using uploaded CSV file for analysis.");
-
-const reader = new FileReader();
-reader.onload = () => {
-  const base64String = reader.result.split(',')[1]; // remove "data:text/csv;base64,"
-  client.publish("obd/command", JSON.stringify({
-    command: "predict-from-csv",
-    motorcycle_id: id,
-    brand,
-    model,
-    file_base64: base64String,
-  }));
-  toast.info("📤 Sent file for analysis via MQTT.");
-};
-reader.readAsDataURL(uploadedFile);  // ✅ more robust and compatible
-
-        } else {
-          setUploadedFile(null);
-          setUseUploadedFile(false);
-
-          toast.info("📡 Using recent sensor data (InfluxDB)...");
-          client.publish("obd/command", JSON.stringify({
+        toast.info("📡 Using recent sensor data (InfluxDB)...");
+        client.publish(
+          "obd/command",
+          JSON.stringify({
             command: "predict",
             motorcycle_id: id,
             brand,
             model,
-          }));
-        }
-      } catch (err) {
-        console.error("❌ Prediction failed:", err);
-        toast.error("❌ Prediction failed. See console for details.");
-        setLoading(false);
+          })
+        );
       }
-    };
+    } catch (err) {
+      console.error("❌ Prediction failed:", err);
+      toast.error("❌ Prediction failed. See console for details.");
+      setLoading(false);
+    }
+  };
 
   const saveRecentDataAsCSV = () => {
     if (!rows.length) {
@@ -252,8 +248,8 @@ reader.readAsDataURL(uploadedFile);  // ✅ more robust and compatible
 
     const headers = Object.keys(rows[0]);
     const csvRows = [
-      headers.join(","), // header row
-      ...rows.map(row => headers.map(h => row[h]).join(",")) // data rows
+      headers.join(","),
+      ...rows.map((row) => headers.map((h) => row[h]).join(",")),
     ];
 
     const csvContent = csvRows.join("\n");
@@ -268,30 +264,29 @@ reader.readAsDataURL(uploadedFile);  // ✅ more robust and compatible
     document.body.removeChild(link);
   };
 
+  const handleTrainModel = async () => {
+    const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
+    const motorcycle_id = selected?.motorcycle_id || selected?.id;
+    const brand = selected?.brand;
 
-   const handleTrainModel = async () => {
-  const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
-  const motorcycle_id = selected?.motorcycle_id || selected?.id;
-  const brand = selected?.brand;
+    if (!motorcycle_id || !brand) {
+      toast.warning("⚠️ Missing motorcycle info.");
+      return;
+    }
 
-  if (!motorcycle_id || !brand) {
-    toast.warning("⚠️ Missing motorcycle info.");
-    return;
-  }
+    try {
+      const res = await axios.post(`${BASE_URL}/train_model`, {
+        motorcycle_id,
+        brand,
+      });
 
-  try {
-    const res = await axios.post(`${BASE_URL}/train_model`, {
-      motorcycle_id,
-      brand,
-    });
-
-    toast.success("✅ Model trained successfully!");
-    console.log(res.data.message);
-  } catch (err) {
-    console.error(err);
-    toast.error("❌ Training failed. Check server logs.");
-  }
-};
+      toast.success("✅ Model trained successfully!");
+      console.log(res.data.message);
+    } catch (err) {
+      console.error(err);
+      toast.error("❌ Training failed. Check server logs.");
+    }
+  };
 
 
   const exportPDF = () => {
