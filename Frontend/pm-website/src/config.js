@@ -1,5 +1,4 @@
-// src/config.js
-export const BASE_URL = process.env.REACT_APP_API_URL;
+
 // src/config.js
 import mqtt from "mqtt";
 
@@ -21,3 +20,5 @@ mqttClient.on("error", (err) => {
 });
 
 export { mqttClient };
+// src/config.js
+export const BASE_URL = process.env.REACT_APP_API_URL;
