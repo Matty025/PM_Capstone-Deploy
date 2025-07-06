@@ -127,10 +127,15 @@ try:
         except KeyboardInterrupt:
             print("\nData gathering stopped by user.")
     else:
-        print(f"Failed to connect to OBD-II device on {port}.")
+         print("[ERROR] Failed to connect to OBD-II adapter. Check ignition or Bluetooth.")
 
 except Exception as e:
-    print(f"Error while connecting to {port}: {e}")
+    if "could not open port" in str(e).lower():
+        print("[ERROR] Bluetooth adapter not connected or COM port not found.")
+    elif "permission denied" in str(e).lower():
+        print("[ERROR] Permission denied to access port.")
+    else:
+        print(f"[ERROR] Unknown connection error: {e}")
 
 finally:
     mqtt_client.loop_stop()

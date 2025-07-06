@@ -38,6 +38,49 @@ import { BASE_URL } from "../config"; // or wherever your config.js is located
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [uploadedFile, setUploadedFile] = useState(null);
     const [useUploadedFile, setUseUploadedFile] = useState(false);
+    const [recentData, setRecentData] = useState(null);
+
+const requestRecentData = () => {
+  const motorcycle = JSON.parse(localStorage.getItem("selectedMotorcycle"));
+  if (!motorcycle?.id) {
+    toast.error("No motorcycle selected.");
+    return;
+  }
+
+  mqttClient.publish("obd/command", JSON.stringify({
+    command: "recent-data",
+    motorcycle_id: motorcycle.id,
+    minutes: 30,
+  }));
+};
+
+
+useEffect(() => {
+  const handleRecentData = (topic, message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      if (data.type === "recent-data") {
+        console.log("✅ Received recent data:", data.rows);
+        setRecentData(data.rows);
+      }
+    } catch (e) {
+      console.error("❌ Error parsing recent data:", e);
+    }
+  };
+
+  mqttClient.on("message", handleRecentData);
+  mqttClient.subscribe("obd/status");
+
+  // Request recent data once on mount
+  requestRecentData();
+
+  return () => {
+    mqttClient.removeListener("message", handleRecentData);
+    mqttClient.unsubscribe("obd/status");
+  };
+}, []);
+
+
 useEffect(() => {
   const selected = JSON.parse(localStorage.getItem("selectedMotorcycle"));
   if (!selected) {

@@ -33,7 +33,7 @@ function Login() {
           localStorage.setItem("userId", data.userId);
           localStorage.setItem("token", data.token);
 
-          toast.success("✅ Login successful!", { autoClose: 2000 });
+          toast.success("Login successful!", { autoClose: 2000 });
 
           setTimeout(() => {
             navigate("/signup-motorcycle");
@@ -45,7 +45,7 @@ function Login() {
         toast.error(data.error || data.message || "Login failed. Please try again.");
       }
     } catch (err) {
-      toast.error("🚫 Error connecting to server. Please try again.");
+      toast.error("Error connecting to server. Please try again.");
     }
   };
 

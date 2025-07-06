@@ -137,7 +137,7 @@ const Dashboard = () => {
     if (!motorcycle?.id) return toast.warning("⚠️ No motorcycle selected.");
     if (!client?.connected) return toast.error("❌ MQTT not connected.");
 
-    toast.info("🔄 Sending start-obd command...");
+    toast.info("🔄 Sending start-obd command to Server");
     client.publish("obd/command", JSON.stringify({
       command: "start-obd",
       motorcycle_id: motorcycle.id,
@@ -150,7 +150,7 @@ const Dashboard = () => {
   const handleStopOBD = () => {
     if (!client?.connected) return toast.error("❌ MQTT not connected.");
 
-    toast.info("🛑 Sending stop-obd command...");
+    toast.info("🛑 Sending stop-obd command to server");
     client.publish("obd/command", JSON.stringify({ command: "stop-obd" }), (err) => {
       if (err) toast.error("❌ Failed to send stop command.");
       else toast.success("📡 Stop command sent.");

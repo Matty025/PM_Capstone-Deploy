@@ -207,11 +207,43 @@ def predict_internal(motorcycle_id, brand, model):
         return {"status": "error", "message": f"Prediction failed: {str(e)}"}
 
 # ───── Optional HTTP Routes for Testing ─────
-@app.route("/start-obd", methods=["POST"])
-def start_obd_route():
-    motorcycle_id = request.json.get("motorcycle_id")
-    threading.Thread(target=lambda: start_obd_internal(motorcycle_id), daemon=True).start()
-    return jsonify({"message": "Starting OBD via HTTP"}), 200
+def start_obd_internal(motorcycle_id=None):
+    global obd_process
+
+    if obd_process and obd_process.poll() is None:
+        publish_status({"status": "running", "message": "OBD already running"})
+        return
+
+    try:
+        args = [sys.executable, "obddata.py"]
+        if motorcycle_id:
+            args.append(str(motorcycle_id))
+        print(f"🛠️ Starting subprocess: {' '.join(args)}")
+        
+        obd_process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        # Send success status for starting
+        publish_status({"status": "started", "pid": obd_process.pid})
+
+        # 🔍 Monitor stdout/stderr for errors
+        def monitor_output(process):
+            for line in process.stdout:
+                print("[OBD STDOUT]", line.strip())
+                if "pid not supported" in line.lower():
+                    publish_status({"status": "error", "message": "PID not supported on this vehicle"})
+                elif "bluetooth" in line.lower() and "not connected" in line.lower():
+                    publish_status({"status": "error", "message": "Bluetooth not connected"})
+                elif "turn on ignition" in line.lower():
+                    publish_status({"status": "error", "message": "Motorcycle is turned off. Please turn it on."})
+            
+            for line in process.stderr:
+                print("[OBD STDERR]", line.strip())
+                publish_status({"status": "error", "message": f"OBD error: {line.strip()}"})
+
+        threading.Thread(target=monitor_output, args=(obd_process,), daemon=True).start()
+
+    except Exception as e:
+        publish_status({"status": "error", "message": str(e)})
 
 @app.route("/stop-obd", methods=["GET"])
 def stop_obd_route():
