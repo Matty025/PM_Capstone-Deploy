@@ -588,3 +588,45 @@ body, html, #root, .dashboardContainers {
 .chartCard select:hover {
   border-color: #4a90e2;
 }
+.reportSubtitle {
+  text-align: center;
+  font-size: 25px;
+  color: #666;
+  margin-top: -10px;
+  margin-bottom: 20px;
+}
+/* Enhanced Maintenance Tips Styling */
+.tipsCard {
+  flex: 1 1 48%;
+  max-width: 48%;
+  background-color: #f0f9f4;
+  padding: 25px 30px;
+  border-left: 6px solid #4caf50;
+  border-radius: 12px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+  text-align: center;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.8;
+  color: #2e7d32;
+}
+
+.normalRangeCard {
+  flex: 1 1 48%;
+  max-width: 48%;
+  background-color: #f0f8ff;
+  padding: 25px 30px;
+  border-radius: 12px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  margin-top: 20px;
+  border-left: 6px solid #4caf50;
+  transition: transform 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .tipsCard,
+  .normalRangeCard {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+}

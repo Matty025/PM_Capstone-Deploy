@@ -153,17 +153,6 @@ def start_obd_internal(motorcycle_id=None):
             for line in iter(stream.readline, ''):
                 line = line.strip()
                 print(f"[OBD {label}] {line}")
-                if is_error:
-                    publish_status({"status": "error", "message": f"OBD error: {line}"})
-                elif "pid not supported" in line.lower():
-                    publish_status({"status": "error", "message": "PID not supported"})
-                elif "bluetooth" in line.lower() and "not connected" in line.lower():
-                    publish_status({"status": "error", "message": "Bluetooth not connected"})
-                elif "turn on ignition" in line.lower():
-                    publish_status({"status": "error", "message": "Turn on motorcycle ignition"})
-
-        threading.Thread(target=read_stream, args=(obd_process.stdout, "STDOUT"), daemon=True).start()
-        threading.Thread(target=read_stream, args=(obd_process.stderr, "STDERR", True), daemon=True).start()
 
     except Exception as e:
         publish_status({"status": "error", "message": str(e)})

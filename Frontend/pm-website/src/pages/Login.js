@@ -9,6 +9,12 @@ function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const validateEmail = (email) => {
+    const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return pattern.test(email);
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -16,36 +22,38 @@ function Login() {
       return;
     }
 
+    if (!validateEmail(email)) {
+      toast.warn("⚠️ Please enter a valid email address");
+      return;
+    }
+
     try {
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        }
-      );
+      setLoading(true);
+
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
       const data = await response.json();
 
-      if (response.ok) {
-        if (data.userId) {
-          localStorage.setItem("userId", data.userId);
-          localStorage.setItem("token", data.token);
+      if (response.ok && data.userId) {
+        localStorage.setItem("userId", data.userId);
+        localStorage.setItem("token", data.token);
 
-          toast.success("Login successful!", { autoClose: 2000 });
+        toast.success("Login successful!", { autoClose: 2000 });
 
-          setTimeout(() => {
-            navigate("/signup-motorcycle");
-          }, 2000);
-        } else {
-          toast.error("Unexpected server response. Please try again.");
-        }
+        setTimeout(() => {
+          navigate("/signup-motorcycle");
+        }, 2000);
       } else {
-        toast.error(data.error || data.message || "Login failed. Please try again.");
+        toast.error(data.error || data.message || " Login failed. Please try again.");
       }
     } catch (err) {
-      toast.error("Error connecting to server. Please try again.");
+      toast.error("🚫 Error connecting to server. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -78,13 +86,19 @@ function Login() {
             onChange={(e) => setPassword(e.target.value)}
           />
 
-          <button onClick={handleLogin}>Login</button>
+          <button onClick={handleLogin} disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
+          </button>
 
           <p>
             Don’t have an account?{" "}
             <span
               onClick={() => navigate("/signup-personal")}
-              style={{ color: "blue", cursor: "pointer", textDecoration: "underline" }}
+              style={{
+                color: "#007BFF",
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
             >
               Sign up
             </span>

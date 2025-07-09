@@ -5,7 +5,7 @@
 
 .left-section {
   flex: 1;
-  background: url("https://png.pngtree.com/thumb_back/fh260/background/20241224/pngtree-motorbike-riders-riding-motorcycle-at-sunset-road-image_16856468.jpg") 
+  background: url("https://i.pinimg.com/736x/2a/ad/3b/2aad3be753d916ae24a327b3be9ee5b5.jpg") 
     no-repeat center center/cover;
   position: relative;
   display: flex;
@@ -105,7 +105,7 @@
   cursor: pointer;
   transition: 0.3s ease-in-out;
   display: block;
-  margin-left: 85px;
+  margin-left: 70px;
 }
 
 .login-form button:hover {

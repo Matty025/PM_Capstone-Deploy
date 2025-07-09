@@ -77,7 +77,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (!client) return;
 const handleConnect = () => {
-  console.log("✅ Connected to MQTT broker");
+  console.log("Connected to MQTT broker");
   if (motorcycle?.id) {
     client.subscribe(`obd/motorcycle/${motorcycle.id}/data`);
   }
@@ -93,9 +93,9 @@ const handleMessage = (topic, message) => {
       const status = statusPayload.status || "";
       const msg = statusPayload.message || "";
 
-      if (status === "started") toast.success("✅ OBD started successfully.");
+      if (status === "started") toast.success("OBD started successfully.");
       else if (status === "stopped") toast.success("🛑 OBD stopped successfully.");
-      else if (status === "error") toast.error("❌ " + msg);
+      else if (status === "error") toast.error("" + msg);
       else toast.info("ℹ️ " + msg);
     } catch (err) {
       console.error("Failed to parse obd/status message:", err);
@@ -136,26 +136,26 @@ return () => {
   }, [motorcycle, updateChartData]);
 
   const handleStartOBD = () => {
-    if (!motorcycle?.id) return toast.warning("⚠️ No motorcycle selected.");
-    if (!client?.connected) return toast.error("❌ MQTT not connected.");
+    if (!motorcycle?.id) return toast.warning("No motorcycle selected.");
+    if (!client?.connected) return toast.error("MQTT not connected.");
 
     toast.info("🔄 Sending start-obd command to Server");
     client.publish("obd/command", JSON.stringify({
       command: "start-obd",
       motorcycle_id: motorcycle.id,
     }), (err) => {
-      if (err) toast.error("❌ Failed to send command.");
-      else toast.success("📡 Start command sent.");
+      if (err) toast.error("Failed to send command.");
+      else toast.success("Start command sent.");
     });
   };
 
   const handleStopOBD = () => {
-    if (!client?.connected) return toast.error("❌ MQTT not connected.");
+    if (!client?.connected) return toast.error("MQTT not connected.");
 
-    toast.info("🛑 Sending stop-obd command to server");
+    toast.info("Sending stop-obd command to server");
     client.publish("obd/command", JSON.stringify({ command: "stop-obd" }), (err) => {
-      if (err) toast.error("❌ Failed to send stop command.");
-      else toast.success("📡 Stop command sent.");
+      if (err) toast.error("Failed to send stop command.");
+      else toast.success(" Stop command sent.");
     });
   };
 
@@ -226,7 +226,11 @@ return () => {
       </div>
 
       <div className="dashboardContent">
-        <h1>OBD Real-Time Dashboard</h1>
+<div className="dashboardHeader">
+  <h1>On-Board Diagnostic (OBD) Dashboard</h1>
+  <p className="subtitle">Real-time engine performance monitoring</p>
+</div>
+
         <div className="buttonGroup">
           <button onClick={handleStartOBD}>Start OBD</button>
           <button onClick={handleStopOBD} style={{ backgroundColor: "red" }}>Stop OBD</button>

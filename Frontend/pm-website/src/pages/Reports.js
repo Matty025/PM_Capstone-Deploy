@@ -242,8 +242,10 @@ const Reports = () => {
 
     </div>
       <div className="dashboardContent">
-        <h2 className="reportTitle">Motorcycle Engine Reports</h2>
-
+    <h2 className="reportTitle">On-Board Diagnostic Engine Report</h2>
+<p className="reportSubtitle">
+  {motorcycle.brand} {motorcycle.model} | {motorcycle.plate_number}
+</p>
         <div className="reportSections" id="report-content">
           
           {/* 🔧 Oil History */}
@@ -260,9 +262,11 @@ const Reports = () => {
                   <tr><th>Date of oil change</th><th>Odometer (km)</th></tr>
                 </thead>
                 <tbody>
-                  {oilHistory.map((entry) => (
+                   {oilHistory.map((entry) => (
                     <tr key={entry.id}>
-                      <td>{new Date(entry.date_of_oil_change).toLocaleDateString()}</td>
+<td>{new Date(entry.date_of_oil_change).toLocaleString("en-US", {
+  month: "long", day: "numeric", year: "numeric"
+})}</td>
                       <td>{entry.odometer_at_change}</td>
                     </tr>
                   ))}
@@ -274,12 +278,16 @@ const Reports = () => {
             </button>
 
             {/* ⚠️ Maintenance Reminder */}
-            {nextDue.km > 0 && (
-              <div className="reminderCard">
-                <strong>Next Oil Change Due:</strong><br />
-                📅 {nextDue.date} or  {nextDue.km} km
-              </div>
-            )}
+        {nextDue.km > 0 && (
+  <div className="reminderCard">
+    <strong>Next Oil Change Due:</strong><br />
+    📅 {new Date(nextDue.date).toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })} or {nextDue.km} km
+  </div>
+)}
           </div>
 {/* 📊 Engine Bar Chart */}
 <div className="reportItem chartCard">
@@ -330,23 +338,6 @@ const Reports = () => {
 )}
 </div>
 
-          {/* ✅ Maintenance Tips */}
-          <div className="reportItem tipsCard">
-            <h3>Maintenance Tips</h3>
-           <ul>
-  <li>Change oil every 1000–1500 km or once a month, whichever comes first.</li>
-  <li>Let the engine warm up for 2–3 minutes before riding to avoid sudden wear.</li>
-  <li>Check coolant levels weekly to prevent overheating and engine damage.</li>
-  <li>Observe throttle response and engine load for signs of irregular performance.</li>
-  <li>Maintain battery voltage around 14V when running; recharge if below 12V.</li>
-  <li>Inspect air filter monthly; clean or replace if dusty or clogged.</li>
-  <li>Check tire pressure regularly and adjust based on load and road conditions.</li>
-  <li> For Manual Lubricate and clean the chain every 500–700 km to extend lifespan.</li>
-  <li>Inspect brake pads and fluid levels to ensure safe stopping distance.</li>
-  <li>Listen for unusual engine noises; they can indicate internal issues.</li>
-</ul>
-
-          </div>
 {/* 📈 Normal Range Table */}
 <div className="reportItem normalRangeCard">
   <h3>📈 Normal Operating Ranges</h3>
@@ -388,6 +379,75 @@ const Reports = () => {
   ) : (
     <p>No normal range data found for this motorcycle.</p>
   )}
+</div>
+
+
+
+    {/* ✅ Maintenance Tips */}
+<div className="reportItem tipsCard">
+  <h3>Maintenance Tips</h3>
+  <ul>
+    <li>
+      Change the engine oil every 1000–1500 km or once a month. Proper intervals extend engine life.
+      <br />
+      <a
+        href="https://www.motorcycle.com/bikes/how-to/how-to-change-your-own-oil-44596906"
+        target="_blank" rel="noopener noreferrer"
+      >
+        Learn more about oil change procedures
+      </a>
+    </li>
+    <li>
+      Warm up the engine for 30 seconds to 2 minutes before riding to let oil circulate.
+      <br />
+      <a
+        href="https://www.revzilla.com/common-tread/warming-up-your-motorcycle"
+        target="_blank" rel="noopener noreferrer"
+      >
+        Learn more about engine warm-up routines
+      </a>
+    </li>
+    <li>
+      Check coolant levels monthly—or weekly in hot weather or on long rides.
+      <br />
+      <a
+        href="https://www.revzilla.com/common-tread/how-to-change-your-motorcycle-coolant"
+        target="_blank" rel="noopener noreferrer"
+      >
+        Learn more about coolant maintenance
+      </a>
+    </li>
+    <li>
+      Maintain battery voltage between 13.8–14.5 V when running; recharge if it drops below 12.4 V.
+      <br />
+      <a
+        href="https://www.motorcyclecruiser.com/how-it-works-charging-system-fundamentals/"
+        target="_blank" rel="noopener noreferrer"
+      >
+        Learn more about motorcycle battery care
+      </a>
+    </li>
+    <li>
+      Inspect the air filter monthly; clean or replace it if dusty or clogged.
+      <br />
+      <a
+        href="https://www.revzilla.com/common-tread/basic-motorcycle-maintenance-checklist-9-simple-steps-for-a-worry-free-riding-season"
+        target="_blank" rel="noopener noreferrer"
+      >
+        Learn more about air filter maintenance
+      </a>
+    </li>
+    <li>
+      Lubricate and clean the drive chain every 500–700 km, or more in rainy or dusty conditions.
+      <br />
+      <a
+        href="https://www.revzilla.com/common-tread/motorcycle-chain-cleaning-and-lubrication"
+        target="_blank" rel="noopener noreferrer"
+      >
+        Learn more about chain maintenance
+      </a>
+    </li>
+  </ul>
 </div>
 
         </div>
